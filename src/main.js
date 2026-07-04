@@ -324,7 +324,7 @@ async function syncDemoRawData(){
                     if(isDemoScheduleLog(logType, compactContent)&&!demoLogDate)demoLogDate=getContentDate(cells, logContent);
                 });
                 m.leadDate=leadDate||assignDate||extractDate(m.create_time)||oldestLogDate||'';
-                m.demoDate=demoDate||demoLogDate||extractDate(m.next_time)||'';
+                m.demoDate=demoDate||demoLogDate||'';
             }catch(e){}
         }));
     }
