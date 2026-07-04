@@ -262,7 +262,7 @@ async function updateSheetMemo(memberId, status, grade, memo, item){
 async function sheetsDeleteRow(rowNum){ await deleteRow(rowNum); }
 
 function normalizeLogText(value){
-    return String(value || '').replace(/\s+/g, '');
+    return String(value || '').replace(/\s+/g, '').toUpperCase();
 }
 
 function extractDate(value){
@@ -273,6 +273,22 @@ function extractDate(value){
 
 function getLogDate(cells, fallbackText=''){
     return extractDate(cells[1] ? cells[1].innerText : '') || extractDate(fallbackText);
+}
+
+function getContentDate(cells, fallbackText=''){
+    return extractDate(fallbackText) || getLogDate(cells, fallbackText);
+}
+
+function isDemoMoveLog(logType, compactContent){
+    return logType.includes('名單移動') && compactContent.includes('DEMO') && compactContent.includes('移動到');
+}
+
+function isNewLeadMoveLog(logType, compactContent){
+    return logType.includes('名單移動') && compactContent.includes('移動到新名單');
+}
+
+function isDemoScheduleLog(logType, compactContent){
+    return compactContent.includes('預約DEMO') || normalizeLogText(logType).includes('預約DEMO');
 }
 
 /* ══ Demo 同步 ══ */
@@ -290,7 +306,7 @@ async function syncDemoRawData(){
                 const html=await res.text();
                 const doc=new DOMParser().parseFromString(html,'text/html');
                 const rows=doc.querySelectorAll('table tbody tr');
-                let leadDate='',demoDate='',assignDate='',demoLogDate='';
+                let leadDate='',demoDate='',assignDate='',demoLogDate='',oldestLogDate='';
                 rows.forEach(r=>{
                     const cells=r.querySelectorAll('td');
                     if(cells.length<4)return;
@@ -299,14 +315,15 @@ async function syncDemoRawData(){
                     const compactContent=normalizeLogText(logContent);
                     const dateVal=getLogDate(cells, logContent);
                     if(!dateVal)return;
-                    if(logType.includes('名單移動')){
-                        if(compactContent.includes('移動到新名單')&&!leadDate)leadDate=dateVal;
-                        if(compactContent.includes('移動到DEMO過名單')&&!demoDate)demoDate=dateVal;
+                    oldestLogDate=dateVal;
+                    if(isNewLeadMoveLog(logType, compactContent)&&!leadDate)leadDate=getContentDate(cells, logContent);
+                    if(isDemoMoveLog(logType, compactContent)&&!demoDate){
+                        demoDate=getContentDate(cells, logContent);
                     }
                     if(logType.includes('指派')&&!assignDate)assignDate=dateVal;
-                    if((logType.includes('預約DEMO')||logType.includes('預約Demo'))&&!demoLogDate)demoLogDate=dateVal;
+                    if(isDemoScheduleLog(logType, compactContent)&&!demoLogDate)demoLogDate=getContentDate(cells, logContent);
                 });
-                m.leadDate=leadDate||assignDate||(m.create_time?m.create_time.split(' ')[0]:'');
+                m.leadDate=leadDate||assignDate||extractDate(m.create_time)||oldestLogDate||'';
                 m.demoDate=demoDate||demoLogDate||'';
             }catch(e){}
         }));
@@ -321,10 +338,14 @@ async function syncDemoRawData(){
     try{
         const res=await gasPost({action:'syncDemoRaw',demoList});
         if(res.success){
-            statusLabel.innerText=res.addedCount>0?'✅ 成功新增 '+res.addedCount+' 筆 Demo 資料':'✅ 名單皆已存在，無須新增';
+            const added=Number(res.addedCount||0);
+            const updated=Number(res.updatedCount||0);
+            statusLabel.innerText=(added||updated)?'✅ 新增 '+added+' 筆，補日期 '+updated+' 筆':'✅ 名單皆已存在，無須新增';
+        }else{
+            throw new Error(res.error||'同步失敗');
         }
         setTimeout(()=>statusLabel.innerText='',3000);
-    }catch(e){statusLabel.innerText='❌ 同步失敗';}
+    }catch(e){statusLabel.innerText='❌ 同步失敗：'+(e.message||e);}
 }
 
 /* ══ DOM UI ══ */
@@ -726,12 +747,12 @@ async function fetchMemberDetail(m) {
             const dateVal = getLogDate(cells, logContent);
             const nextTimeVal = extractDate(cells[2] ? cells[2].innerText : '');
             
-            if (logType.includes('預約DEMO') || logType.includes('預約Demo')) {
+            if (isDemoScheduleLog(logType, compactContent)) {
                 if (!reachedNormal) hasScheduledDemo = true;
             }
 
             if (logType.includes('名單移動')) {
-                if (compactContent.includes('移動到新名單') && !assignDate) assignDate = dateVal;
+                if (isNewLeadMoveLog(logType, compactContent) && !assignDate) assignDate = dateVal;
                 if (compactContent.includes('移動到常態名單') && !normalDate) {
                     normalDate = dateVal;
                     reachedNormal = true;
