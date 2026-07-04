@@ -324,11 +324,20 @@ async function syncDemoRawData(){
                     if(isDemoScheduleLog(logType, compactContent)&&!demoLogDate)demoLogDate=getContentDate(cells, logContent);
                 });
                 m.leadDate=leadDate||assignDate||extractDate(m.create_time)||oldestLogDate||'';
-                m.demoDate=demoDate||demoLogDate||'';
+                m.demoDate=demoDate||demoLogDate||extractDate(m.next_time)||'';
             }catch(e){}
         }));
     }
     statusLabel.innerText='🔄 傳送資料至試算表...';
+    const missingDemoDates=demoTargets.filter(item=>!item.demoDate);
+    if(missingDemoDates.length){
+        console.warn('[Demo同步] 以下名單仍未抓到轉Demo日期', missingDemoDates.map(item=>({
+            member_id:item.member_id||item.id,
+            name:item.member_name,
+            next_time:item.next_time,
+            create_time:item.create_time
+        })));
+    }
     const demoList=demoTargets.map(item=>({
         member_id:item.member_id||item.id,member_name:item.member_name,mobile:item.mobile,
         source:item.source,user_name:item.user_name,
