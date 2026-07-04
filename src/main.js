@@ -261,6 +261,20 @@ async function updateSheetMemo(memberId, status, grade, memo, item){
 
 async function sheetsDeleteRow(rowNum){ await deleteRow(rowNum); }
 
+function normalizeLogText(value){
+    return String(value || '').replace(/\s+/g, '');
+}
+
+function extractDate(value){
+    const match = String(value || '').match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if(!match) return '';
+    return match[1] + '-' + match[2].padStart(2, '0') + '-' + match[3].padStart(2, '0');
+}
+
+function getLogDate(cells, fallbackText=''){
+    return extractDate(cells[1] ? cells[1].innerText : '') || extractDate(fallbackText);
+}
+
 /* ══ Demo 同步 ══ */
 async function syncDemoRawData(){
     const statusLabel=document.getElementById('loading-status');
@@ -275,24 +289,19 @@ async function syncDemoRawData(){
                 const res=await fetch('/admin/request_develop?member_id='+(m.member_id||m.id)+'&hide_layout=true');
                 const html=await res.text();
                 const doc=new DOMParser().parseFromString(html,'text/html');
-                const tables=doc.querySelectorAll('table');
-                let logTable=null;
-                for(let t of tables){
-                    if(t.innerText.includes('類型')&&t.innerText.includes('內容')){
-                        logTable=t;break;
-                    }
-                }
-                const rows=logTable?logTable.querySelectorAll('tbody tr'):[];
+                const rows=doc.querySelectorAll('table tbody tr');
                 let leadDate='',demoDate='',assignDate='',demoLogDate='';
                 rows.forEach(r=>{
                     const cells=r.querySelectorAll('td');
                     if(cells.length<4)return;
                     const logType=cells[3].innerText.trim();
                     const logContent=cells[4]?cells[4].innerText:'';
-                    const dateVal=cells[1].innerText.split(' ')[0];
+                    const compactContent=normalizeLogText(logContent);
+                    const dateVal=getLogDate(cells, logContent);
+                    if(!dateVal)return;
                     if(logType.includes('名單移動')){
-                        if(logContent.includes('移動到新名單')&&!leadDate)leadDate=dateVal;
-                        if(logContent.includes('移動到DEMO過名單')&&!demoDate)demoDate=dateVal;
+                        if(compactContent.includes('移動到新名單')&&!leadDate)leadDate=dateVal;
+                        if(compactContent.includes('移動到DEMO過名單')&&!demoDate)demoDate=dateVal;
                     }
                     if(logType.includes('指派')&&!assignDate)assignDate=dateVal;
                     if((logType.includes('預約DEMO')||logType.includes('預約Demo'))&&!demoLogDate)demoLogDate=dateVal;
@@ -713,16 +722,17 @@ async function fetchMemberDetail(m) {
             if (cells.length < 4) return;
             const logType = cells[3].innerText.trim();
             const logContent = cells[4] ? cells[4].innerText.trim() : '';
-            const dateVal = cells[1].innerText.split(' ')[0];
-            const nextTimeVal = cells[2] ? cells[2].innerText.trim().split(' ')[0] : '';
+            const compactContent = normalizeLogText(logContent);
+            const dateVal = getLogDate(cells, logContent);
+            const nextTimeVal = extractDate(cells[2] ? cells[2].innerText : '');
             
             if (logType.includes('預約DEMO') || logType.includes('預約Demo')) {
                 if (!reachedNormal) hasScheduledDemo = true;
             }
 
             if (logType.includes('名單移動')) {
-                if (logContent.includes('移動到新名單') && !assignDate) assignDate = dateVal;
-                if (logContent.includes('移動到常態名單') && !normalDate) {
+                if (compactContent.includes('移動到新名單') && !assignDate) assignDate = dateVal;
+                if (compactContent.includes('移動到常態名單') && !normalDate) {
                     normalDate = dateVal;
                     reachedNormal = true;
                 }
@@ -2927,4 +2937,3 @@ function dialerShowManualInput(baseDataArray, sortByNextTime) {
 
 /* ══ 啟動 ══ */
 fetchData();
-
