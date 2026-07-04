@@ -275,8 +275,15 @@ async function syncDemoRawData(){
                 const res=await fetch('/admin/request_develop?member_id='+(m.member_id||m.id)+'&hide_layout=true');
                 const html=await res.text();
                 const doc=new DOMParser().parseFromString(html,'text/html');
-                const rows=doc.querySelectorAll('table tbody tr');
-                let leadDate='',demoDate='';
+                const tables=doc.querySelectorAll('table');
+                let logTable=null;
+                for(let t of tables){
+                    if(t.innerText.includes('類型')&&t.innerText.includes('內容')){
+                        logTable=t;break;
+                    }
+                }
+                const rows=logTable?logTable.querySelectorAll('tbody tr'):[];
+                let leadDate='',demoDate='',assignDate='',demoLogDate='';
                 rows.forEach(r=>{
                     const cells=r.querySelectorAll('td');
                     if(cells.length<4)return;
@@ -287,8 +294,11 @@ async function syncDemoRawData(){
                         if(logContent.includes('移動到新名單')&&!leadDate)leadDate=dateVal;
                         if(logContent.includes('移動到DEMO過名單')&&!demoDate)demoDate=dateVal;
                     }
+                    if(logType.includes('指派')&&!assignDate)assignDate=dateVal;
+                    if((logType.includes('預約DEMO')||logType.includes('預約Demo'))&&!demoLogDate)demoLogDate=dateVal;
                 });
-                m.leadDate=leadDate;m.demoDate=demoDate;
+                m.leadDate=leadDate||assignDate||(m.create_time?m.create_time.split(' ')[0]:'');
+                m.demoDate=demoDate||demoLogDate||'';
             }catch(e){}
         }));
     }
