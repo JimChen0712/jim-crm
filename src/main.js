@@ -307,6 +307,7 @@ async function syncDemoRawData(){
                 const doc=new DOMParser().parseFromString(html,'text/html');
                 const rows=doc.querySelectorAll('table tbody tr');
                 let leadDate='',demoDate='',assignDate='',demoLogDate='',oldestLogDate='';
+                const debugLogs=[];
                 rows.forEach(r=>{
                     const cells=r.querySelectorAll('td');
                     if(cells.length<4)return;
@@ -314,6 +315,12 @@ async function syncDemoRawData(){
                     const logContent=cells[4]?cells[4].innerText:'';
                     const compactContent=normalizeLogText(logContent);
                     const dateVal=getLogDate(cells, logContent);
+                    debugLogs.push({
+                        date:dateVal,
+                        next_time:cells[2]?cells[2].innerText.trim():'',
+                        type:logType,
+                        content:logContent.trim().replace(/\s+/g, ' ').slice(0, 180)
+                    });
                     if(!dateVal)return;
                     oldestLogDate=dateVal;
                     if(isNewLeadMoveLog(logType, compactContent)&&!leadDate)leadDate=getContentDate(cells, logContent);
@@ -325,6 +332,7 @@ async function syncDemoRawData(){
                 });
                 m.leadDate=leadDate||assignDate||extractDate(m.create_time)||oldestLogDate||'';
                 m.demoDate=demoDate||demoLogDate||'';
+                m._demoSyncDebugLogs=debugLogs;
             }catch(e){}
         }));
     }
@@ -335,7 +343,8 @@ async function syncDemoRawData(){
             member_id:item.member_id||item.id,
             name:item.member_name,
             next_time:item.next_time,
-            create_time:item.create_time
+            create_time:item.create_time,
+            logs:item._demoSyncDebugLogs||[]
         })));
     }
     const demoList=demoTargets.map(item=>({
