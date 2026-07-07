@@ -234,14 +234,10 @@ async function syncNewMemberToSheet(item, assignDate){
 
 async function updateSheetMemo(memberId, status, grade, memo, item){
     const id = String(memberId);
-    
-    if (item.type == 2 && typeof sheetRowMap[id] !== 'number') {
-        console.log('舊常態名單不寫入 Sheet:', memberId);
-        return;
-    }
 
     if (typeof sheetRowMap[id] !== 'number') {
-        await ensureMemberInSheet(memberId, item, null);
+        const detail = detailData[id] || {};
+        await ensureMemberInSheet(memberId, item, detail.assignDate || detail.normalDate || null);
     }
     const rowNum = sheetRowMap[id];
     if (typeof rowNum !== 'number') {
