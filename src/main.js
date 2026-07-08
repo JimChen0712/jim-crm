@@ -49,6 +49,81 @@ if (!document.querySelector('meta[name="viewport"]')) {
 const isManager=crmUid===MANAGER_UID;
 const isSpoofing=!!originalUid; 
 const fetchUrl='https://server.etalkingonline.com/name_list/new_list/'+(isManager?'-1':crmUid);
+const CRM_BUILD_ID=__CRM_BUILD_ID__;
+const CRM_SCRIPT_CHECK_URL='https://raw.githubusercontent.com/JimChen0712/etalking-crm/main/crm.js';
+const PANEL_MAX_AGE_MS=2*60*60*1000;
+const GUARD_SESSION_CACHE_MS=30000;
+const GUARD_VERSION_CACHE_MS=60000;
+const panelStartedAt=Date.now();
+let lastBackendGuardAt=0;
+let lastVersionGuardAt=0;
+let lastGuardAlertAt=0;
+
+async function guardFetch(url, options={}, timeoutMs=12000) {
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(), timeoutMs);
+    try{
+        return await fetch(url,{...options,signal:controller.signal,credentials:'include'});
+    }catch(e){
+        if(e.name==='AbortError')throw new Error('連線逾時，請重新整理後台並重新開啟 CRM 面板');
+        throw e;
+    }finally{
+        clearTimeout(timer);
+    }
+}
+
+async function ensureLatestPanelVersion(){
+    const now=Date.now();
+    if(now-lastVersionGuardAt<GUARD_VERSION_CACHE_MS)return;
+    lastVersionGuardAt=now;
+
+    const res=await guardFetch(CRM_SCRIPT_CHECK_URL+'?crm_version_check='+now,{cache:'no-store'},12000);
+    const text=await res.text();
+    if(!res.ok||!text.includes(CRM_BUILD_ID)){
+        throw new Error('CRM 面板已有新版，請關閉面板、重新整理後台，再點一次書籤');
+    }
+}
+
+function looksLikeLoginPage(text){
+    const compact=String(text||'').replace(/\s+/g,'').toLowerCase();
+    return compact.includes('login')||compact.includes('登入')||compact.includes('請先登入')||compact.includes('sign in');
+}
+
+function looksLikeMemberDetail(text, memberId){
+    const body=String(text||'');
+    if(!body||body.length<500)return false;
+    if(looksLikeLoginPage(body))return false;
+    return body.includes(String(memberId))||body.includes('<table')||body.includes('聯絡')||body.includes('名單')||body.includes('request_develop');
+}
+
+async function ensureBackendSession(memberId){
+    const now=Date.now();
+    if(now-lastBackendGuardAt<GUARD_SESSION_CACHE_MS)return;
+    lastBackendGuardAt=now;
+
+    const checkId=memberId||232821;
+    const res=await guardFetch('/admin/request_develop?member_id='+encodeURIComponent(checkId)+'&hide_layout=true&crm_guard='+now,{cache:'no-store'},12000);
+    const text=await res.text();
+    if(!res.ok||!looksLikeMemberDetail(text, checkId)){
+        throw new Error('後台連線或登入狀態已失效，請重新整理後台並重新開啟 CRM 面板');
+    }
+}
+
+async function ensurePanelCanWrite(memberId){
+    if(Date.now()-panelStartedAt>PANEL_MAX_AGE_MS){
+        throw new Error('CRM 面板已開啟超過 2 小時，請重新整理後台並重新開啟面板');
+    }
+    await ensureLatestPanelVersion();
+    await ensureBackendSession(memberId);
+}
+
+function notifyGuardError(err){
+    const message=err&&err.message?err.message:String(err||'未知錯誤');
+    if(Date.now()-lastGuardAlertAt>5000){
+        lastGuardAlertAt=Date.now();
+        alert('⚠️ 寫入已停止\n\n'+message);
+    }
+}
 
 /* ══ LocalStorage 聯繫紀錄管理 ══ */
 const LOCAL_CONTACTED_KEY = 'etalking_contacted_pool';
@@ -107,6 +182,7 @@ let globalSheetWriteLock = Promise.resolve();
 async function appendMemberToSheet(memberId, item, assignDate) {
     const id = String(memberId);
     if (typeof sheetRowMap[id] === 'number') return;
+    await ensurePanelCanWrite(id);
 
     const now = new Date();
     const month = now.getFullYear() + '/' + String(now.getMonth() + 1).padStart(2, '0');
@@ -208,6 +284,7 @@ function debounceSaveMemo(memberId, grade, memo, item) {
         } catch(e) {
             console.error(e);
             setSaveStatus(memberId, 'error');
+            notifyGuardError(e);
         } finally {
             releaseLock();
         }
@@ -242,6 +319,7 @@ async function syncNewMemberToSheet(item, assignDate){
 
 async function updateSheetMemo(memberId, status, grade, memo, item){
     const id = String(memberId);
+    await ensurePanelCanWrite(id);
 
     if (typeof sheetRowMap[id] !== 'number') {
         const detail = detailData[id] || {};
@@ -1175,40 +1253,50 @@ function renderList(){
     });
 }
 document.getElementById('modal-cancel').onclick = () => { document.getElementById('record-modal').style.display='none'; };
-document.getElementById('modal-submit').onclick=()=>{
+document.getElementById('modal-submit').onclick=async()=>{
     if(!currentItem)return;
     const memberId=document.getElementById('modal-member-id').value;
     const btn=document.getElementById('modal-submit');btn.innerText='送出中...';
-    
-    let iframe=document.getElementById('hidden-save-frame');
-    if(!iframe){
-        iframe=document.createElement('iframe');
-        iframe.name='hidden-save-frame';iframe.id='hidden-save-frame';iframe.style.display='none';iframe.sandbox='allow-forms allow-same-origin';
-        document.body.appendChild(iframe);
-    }
-    const form=document.createElement('form');form.target='hidden-save-frame';form.method='POST';
-    form.action='https://www.etalkingonline.com/admin/request_develop/save';
-    const params={'current_member_id':memberId,'contact_status':document.getElementById('modal-status').value,'content':document.getElementById('modal-content').value,'sub_content':'','search_begin':document.getElementById('modal-date').value,'time':'12:00:00','consultant_type':'10','type':'20'};
-    for(let k in params){let i=document.createElement('input');i.type='hidden';i.name=k;i.value=params[k];form.appendChild(i);}
-    
-    document.body.appendChild(form);form.submit();
-    setTimeout(()=>form.remove(), 500);
+    btn.disabled=true;
 
-    setTimeout(()=>{
-        alert('✅ 紀錄已成功送出！');
-        recordModal.style.display='none';btn.innerText='送出紀錄';
-        if(currentItem.type==1&&detailData[memberId])detailData[memberId].contactCount++;
-        if(detailData[memberId]) {
-            detailData[memberId].lastLogNextTime = params['search_begin'];
+    try{
+        await ensurePanelCanWrite(memberId);
+
+        let iframe=document.getElementById('hidden-save-frame');
+        if(!iframe){
+            iframe=document.createElement('iframe');
+            iframe.name='hidden-save-frame';iframe.id='hidden-save-frame';iframe.style.display='none';iframe.sandbox='allow-forms allow-same-origin';
+            document.body.appendChild(iframe);
         }
-        currentItem.next_time=params['search_begin']+' 11:59:59';
+        const form=document.createElement('form');form.target='hidden-save-frame';form.method='POST';
+        form.action='https://www.etalkingonline.com/admin/request_develop/save';
+        const params={'current_member_id':memberId,'contact_status':document.getElementById('modal-status').value,'content':document.getElementById('modal-content').value,'sub_content':'','search_begin':document.getElementById('modal-date').value,'time':'12:00:00','consultant_type':'10','type':'20'};
+        for(let k in params){let i=document.createElement('input');i.type='hidden';i.name=k;i.value=params[k];form.appendChild(i);}
         
-        if (params['contact_status'] === '1' && currentItem.type == 4) {
-            setLocalContacted(memberId, false);
-        }
+        document.body.appendChild(form);form.submit();
+        setTimeout(()=>form.remove(), 500);
 
-        renderList();
-    },1000);
+        setTimeout(()=>{
+            alert('✅ 紀錄已成功送出！');
+            recordModal.style.display='none';btn.innerText='送出紀錄';btn.disabled=false;
+            if(currentItem.type==1&&detailData[memberId])detailData[memberId].contactCount++;
+            if(detailData[memberId]) {
+                detailData[memberId].lastLogNextTime = params['search_begin'];
+            }
+            currentItem.next_time=params['search_begin']+' 11:59:59';
+
+            if (params['contact_status'] === '1' && currentItem.type == 4) {
+                setLocalContacted(memberId, false);
+            }
+
+            renderList();
+        },1000);
+    }catch(e){
+        console.error(e);
+        btn.innerText='送出紀錄';
+        btn.disabled=false;
+        notifyGuardError(e);
+    }
 };
 
 /* ══ 名單管理頁面：批次處理 (包含延遲的原始邏輯) ══ */
@@ -1837,10 +1925,13 @@ if(isManager){
                     const rowNum = sheetRowMap[id];
                     if(rowNum) {
                         try {
+                            await ensurePanelCanWrite(id);
                             await updateRow(rowNum, [sd.status, sd.grade, sd.memo, timeStr, contactRate]);
                             sd.contactRate = contactRate;
                         } catch(e) {
                             console.error('Batch update row failed', id, e);
+                            notifyGuardError(e);
+                            break;
                         }
                     }
                 }
