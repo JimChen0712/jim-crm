@@ -104,9 +104,41 @@ let currentSearchTerm = '';
 ══════════════════════════════════════════════════════ */
 let globalSheetWriteLock = Promise.resolve();
 
-async function ensureMemberInSheet(memberId, item, assignDate) {
+async function appendMemberToSheet(memberId, item, assignDate) {
     const id = String(memberId);
     if (typeof sheetRowMap[id] === 'number') return;
+
+    const now = new Date();
+    const month = now.getFullYear() + '/' + String(now.getMonth() + 1).padStart(2, '0');
+    const dateStr = assignDate || now.toISOString().split('T')[0];
+    const ownerName = (item.user_name && item.user_name.trim())
+        ? item.user_name.trim() : getWriterName();
+
+    const contactRate = (detailData[id] && detailData[id].contactRate) ? detailData[id].contactRate : '';
+
+    const res = await appendRow([
+        id, item.member_name || '', item.mobile || '',
+        item.source || '無', ownerName, crmUid, dateStr, month,
+        item.type == 1 ? '新單' : '', '', '', now.toLocaleString('zh-TW'),
+        contactRate
+    ]);
+
+    if (res && typeof res.rowNum === 'number' && res.rowNum > 0) {
+        sheetRowMap[id] = res.rowNum;
+        if (res.rowNum > maxKnownRow) maxKnownRow = res.rowNum;
+    } else {
+        throw new Error('appendRow 回傳異常: ' + JSON.stringify(res));
+    }
+}
+
+async function ensureMemberInSheet(memberId, item, assignDate, alreadyQueued = false) {
+    const id = String(memberId);
+    if (typeof sheetRowMap[id] === 'number') return;
+
+    if (alreadyQueued) {
+        await appendMemberToSheet(memberId, item, assignDate);
+        return;
+    }
 
     let releaseLock;
     const waitMyTurn = new Promise(r => releaseLock = r);
@@ -116,33 +148,9 @@ async function ensureMemberInSheet(memberId, item, assignDate) {
     await previousLock;
 
     try {
-        if (typeof sheetRowMap[id] === 'number') return;
-
-        const now = new Date();
-        const month = now.getFullYear() + '/' + String(now.getMonth() + 1).padStart(2, '0');
-        const dateStr = assignDate || now.toISOString().split('T')[0];
-        const ownerName = (item.user_name && item.user_name.trim())
-            ? item.user_name.trim() : getWriterName();
-
-        const contactRate = (detailData[id] && detailData[id].contactRate) ? detailData[id].contactRate : '';
-
-        const res = await appendRow([
-            id, item.member_name || '', item.mobile || '',
-            item.source || '無', ownerName, crmUid, dateStr, month,
-            item.type == 1 ? '新單' : '', '', '', now.toLocaleString('zh-TW'),
-            contactRate
-        ]);
-
-        if (res && typeof res.rowNum === 'number' && res.rowNum > 0) {
-            sheetRowMap[id] = res.rowNum;
-            if (res.rowNum > maxKnownRow) maxKnownRow = res.rowNum;
-        } else {
-            throw new Error('appendRow 回傳異常: ' + JSON.stringify(res));
-        }
-    } catch(e) {
-        throw e;
+        await appendMemberToSheet(memberId, item, assignDate);
     } finally {
-        releaseLock(); 
+        releaseLock();
     }
 }
 
@@ -237,7 +245,7 @@ async function updateSheetMemo(memberId, status, grade, memo, item){
 
     if (typeof sheetRowMap[id] !== 'number') {
         const detail = detailData[id] || {};
-        await ensureMemberInSheet(memberId, item, detail.assignDate || detail.normalDate || null);
+        await ensureMemberInSheet(memberId, item, detail.assignDate || detail.normalDate || null, true);
     }
     const rowNum = sheetRowMap[id];
     if (typeof rowNum !== 'number') {
