@@ -2474,11 +2474,11 @@ function dialerInit(queue) {
                 background:#3498db;color:white;font-weight:bold;font-size:12px;
                 cursor:pointer;white-space:nowrap;
             ">重新撥號</button>
-            <button id="dialer-btn-skip" title="轉語音後切換下一通" style="
-                padding:10px 5px;border:none;border-radius:8px;
-                background:#636e72;color:white;font-weight:bold;font-size:10px;
+            <button id="dialer-btn-skip" title="轉語音後切換下一通（快捷鍵 C）" style="
+                padding:10px 12px;border:none;border-radius:8px;
+                background:#636e72;color:white;font-weight:bold;font-size:13px;
                 cursor:pointer;white-space:nowrap;
-            ">語音／下一通</button>
+            ">語音</button>
             <button id="dialer-btn-pause" style="
                 padding:10px 8px;border:none;border-radius:8px;
                 background:#8e44ad;color:white;font-weight:bold;font-size:12px;
@@ -2630,6 +2630,7 @@ function dialerKeyHandler(e) {
     const key = e.key.toLowerCase();
     if(key === 'z') dialerOnAnswer();
     if(key === 'x') dialerOnMiss(true);
+    if(key === 'c') dialerOnSkip();
 }
 
 function setDialerCallActionsReady(ready){
@@ -2663,7 +2664,7 @@ async function dialerStep({sameMember=false}={}) {
         btnSkip.style.border = 'none';
         btnSkip.style.color = 'white';
         btnSkip.style.cursor = 'pointer';
-        btnSkip.innerText = '語音／下一通';
+        btnSkip.innerText = '語音';
     }
     const miniBtnSkip = document.getElementById('mini-btn-skip');
     if(miniBtnSkip) {
@@ -2703,7 +2704,7 @@ async function dialerStep({sameMember=false}={}) {
             btnSkip.disabled = true;
             btnSkip.style.background = '#2f3640';
             btnSkip.style.color = '#718093';
-            btnSkip.innerText = '語音／下一通';
+            btnSkip.innerText = '語音';
         }
 
         if(pauseBtn) {
@@ -3220,7 +3221,7 @@ function dialerToggleMinimize() {
             <div style="display:flex;gap:4px;margin-left:4px;">
                 <button id="mini-btn-answer" style="padding:4px 8px;border:none;border-radius:6px;background:#27ae60;color:white;font-weight:bold;font-size:12px;cursor:pointer;">✅</button>
                 <button id="mini-btn-miss" style="padding:4px 8px;border:none;border-radius:6px;background:#e74c3c;color:white;font-weight:bold;font-size:12px;cursor:pointer;">❌</button>
-                <button id="mini-btn-skip" title="語音／下一通" style="padding:4px 8px;border:none;border-radius:6px;background:#636e72;color:white;font-weight:bold;font-size:13px;cursor:pointer;">⏭</button>
+                <button id="mini-btn-skip" title="語音（快捷鍵 C）" style="padding:4px 8px;border:none;border-radius:6px;background:#636e72;color:white;font-weight:bold;font-size:11px;cursor:pointer;">語音</button>
                 <button id="mini-btn-pause" style="padding:4px 8px;border:none;border-radius:6px;background:#8e44ad;color:white;font-weight:bold;font-size:13px;cursor:pointer;">⏸</button>
             </div>
         `;
