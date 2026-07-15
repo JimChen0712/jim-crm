@@ -1288,8 +1288,8 @@ function renderList(){
 
         const batchCell = isManager ? '<td style="padding:6px;text-align:center;vertical-align:top;"><input type="checkbox" class="row-cb" value="'+id+'" style="cursor:pointer;"></td>' : '';
         const hasPhone=!!String(item.mobile||'').trim();
-        const nameTools='<span style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;vertical-align:middle;">' +
-            '<button class="history-btn" data-id="'+id+'" title="查看聯繫歷史" aria-label="查看聯繫歷史" style="width:24px;height:22px;padding:0;border:1px solid #5d6d7e;border-radius:50%;background:#f4f6f7;color:#34495e;cursor:pointer;font-size:11px;font-weight:bold;line-height:20px;">H</button>' +
+        const nameTools='<span style="display:inline-flex;align-items:center;gap:8px;margin-left:6px;vertical-align:middle;">' +
+            '<button class="history-btn" data-id="'+id+'" title="查看聯繫歷史" aria-label="查看聯繫歷史" style="width:24px;height:22px;padding:0;border:1px solid #b2babb;border-radius:50%;background:#f2f3f4;color:#7b7d7d;cursor:pointer;font-size:11px;font-weight:bold;line-height:20px;">H</button>' +
             '<button class="single-dial-btn" data-id="'+id+'" title="'+(hasPhone?'撥打此名單':'沒有電話號碼')+'" '+(hasPhone?'':'disabled')+' style="width:24px;height:22px;padding:0;border:1px solid '+(hasPhone?'#27ae60':'#bdc3c7')+';border-radius:50%;background:'+(hasPhone?'#eafaf1':'#f2f3f4')+';color:'+(hasPhone?'#1e8449':'#aab7b8')+';cursor:'+(hasPhone?'pointer':'not-allowed')+';font-size:12px;line-height:20px;">📞</button>' +
             '</span>';
 
