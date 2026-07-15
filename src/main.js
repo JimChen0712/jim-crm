@@ -2413,24 +2413,18 @@ function dialerInit(queue) {
             font-size:14px;
         ">
             <span>自動撥號系統</span>
-            <button id="dialer-minimize-btn" style="
-                background:transparent;
-                border:none;
-                font-size:16px;
-                cursor:pointer;
-                color:#1e272e;
-                line-height:1;
-                padding:0 4px;
-            ">▬</button>
-            <button id="dialer-close-btn" style="
-                background:transparent;
-                border:none;
-                font-size:18px;
-                cursor:pointer;
-                color:#1e272e;
-                line-height:1;
-                padding:0 2px;
-            ">×</button>
+            <div style="display:flex;align-items:center;gap:2px;margin-left:auto;">
+                <button id="dialer-minimize-btn" title="縮小" style="
+                    width:26px;height:24px;display:flex;align-items:center;justify-content:center;
+                    background:transparent;border:none;border-radius:4px;
+                    font-size:16px;cursor:pointer;color:#1e272e;line-height:1;padding:0;
+                ">▬</button>
+                <button id="dialer-close-btn" title="關閉" style="
+                    width:26px;height:24px;display:flex;align-items:center;justify-content:center;
+                    background:transparent;border:none;border-radius:4px;
+                    font-size:19px;cursor:pointer;color:#1e272e;line-height:1;padding:0;
+                ">×</button>
+            </div>
         </div>
 
         <div style="padding:12px 14px 8px;">
@@ -2479,7 +2473,7 @@ function dialerInit(queue) {
                 padding:10px 12px;border:none;border-radius:8px;
                 background:#636e72;color:white;font-weight:bold;font-size:13px;
                 cursor:pointer;white-space:nowrap;
-            ">語音</button>
+            ">語音(C)</button>
             <button id="dialer-btn-pause" style="
                 padding:10px 8px;border:none;border-radius:8px;
                 background:#8e44ad;color:white;font-weight:bold;font-size:12px;
@@ -2665,7 +2659,7 @@ async function dialerStep({sameMember=false}={}) {
         btnSkip.style.border = 'none';
         btnSkip.style.color = 'white';
         btnSkip.style.cursor = 'pointer';
-        btnSkip.innerText = '語音';
+        btnSkip.innerText = '語音(C)';
     }
     const miniBtnSkip = document.getElementById('mini-btn-skip');
     if(miniBtnSkip) {
@@ -2705,7 +2699,7 @@ async function dialerStep({sameMember=false}={}) {
             btnSkip.disabled = true;
             btnSkip.style.background = '#2f3640';
             btnSkip.style.color = '#718093';
-            btnSkip.innerText = '語音';
+            btnSkip.innerText = '語音(C)';
         }
 
         if(pauseBtn) {
@@ -3213,17 +3207,21 @@ function dialerToggleMinimize() {
     if(!miniBar) {
         miniBar = document.createElement('div');
         miniBar.id = 'dialer-mini-bar';
-        miniBar.style.cssText = 'display:none;align-items:center;gap:8px;padding:6px 12px;background:#1e272e;';
+        miniBar.style.cssText = 'display:none;align-items:center;gap:10px;padding:8px 10px;background:#1e272e;box-sizing:border-box;';
         miniBar.innerHTML = `
-            <span id="mini-name" style="font-size:12px;font-weight:bold;color:#fff;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;">-</span>
-            <span id="mini-phone" style="font-size:11px;color:#a4b0be;white-space:nowrap;">-</span>
-            <span style="font-size:10px;color:#718093;white-space:nowrap;">⏱</span>
-            <span id="mini-countdown" style="font-size:13px;font-weight:bold;color:#e74c3c;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:36px;">00:${String(DIALER_CALL_SECONDS).padStart(2, '0')}</span>
-            <div style="display:flex;gap:4px;margin-left:4px;">
-                <button id="mini-btn-answer" style="padding:4px 8px;border:none;border-radius:6px;background:#27ae60;color:white;font-weight:bold;font-size:12px;cursor:pointer;">✅</button>
-                <button id="mini-btn-miss" style="padding:4px 8px;border:none;border-radius:6px;background:#e74c3c;color:white;font-weight:bold;font-size:12px;cursor:pointer;">❌</button>
-                <button id="mini-btn-skip" title="語音（快捷鍵 C）" style="padding:4px 8px;border:none;border-radius:6px;background:#636e72;color:white;font-weight:bold;font-size:11px;cursor:pointer;">語音</button>
-                <button id="mini-btn-pause" style="padding:4px 8px;border:none;border-radius:6px;background:#8e44ad;color:white;font-weight:bold;font-size:13px;cursor:pointer;">⏸</button>
+            <div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:2px;">
+                <span id="mini-name" style="font-size:12px;font-weight:bold;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">-</span>
+                <span id="mini-phone" style="font-size:10px;color:#a4b0be;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">-</span>
+            </div>
+            <div style="padding:2px 10px;border-left:1px solid #39444d;border-right:1px solid #39444d;text-align:center;">
+                <span id="mini-countdown" style="display:block;font-size:15px;font-weight:bold;color:#e74c3c;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:42px;">00:${String(DIALER_CALL_SECONDS).padStart(2, '0')}</span>
+                <span style="display:block;font-size:9px;color:#718093;margin-top:1px;">倒數</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+                <button id="mini-btn-answer" title="接通（快捷鍵 Z）" style="height:30px;padding:0 9px;border:none;border-radius:6px;background:#27ae60;color:white;font-weight:bold;font-size:11px;cursor:pointer;white-space:nowrap;">接通(Z)</button>
+                <button id="mini-btn-miss" title="未接（快捷鍵 X）" style="height:30px;padding:0 9px;border:none;border-radius:6px;background:#e74c3c;color:white;font-weight:bold;font-size:11px;cursor:pointer;white-space:nowrap;">未接(X)</button>
+                <button id="mini-btn-skip" title="語音（快捷鍵 C）" style="height:30px;padding:0 9px;border:none;border-radius:6px;background:#636e72;color:white;font-weight:bold;font-size:11px;cursor:pointer;white-space:nowrap;">語音(C)</button>
+                <button id="mini-btn-pause" title="暫停" style="width:32px;height:30px;padding:0;border:none;border-radius:6px;background:#8e44ad;color:white;font-weight:bold;font-size:13px;cursor:pointer;">⏸</button>
             </div>
         `;
         dialerPanel.appendChild(miniBar);
@@ -3247,7 +3245,7 @@ function dialerToggleMinimize() {
     if(dialerMinimized) {
         bodyEls.forEach(el => { el.dataset.prevDisplay = el.style.display || ''; el.style.display = 'none'; });
         miniBar.style.display = 'flex';
-        dialerPanel.style.width = '460px';
+        dialerPanel.style.width = '520px';
         dialerPanel.style.maxWidth = 'calc(100vw - 40px)';
         document.getElementById('dialer-minimize-btn').innerText = '▣';
         dialerSyncMiniBar();
