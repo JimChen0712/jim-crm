@@ -2261,6 +2261,7 @@ let dialerTimer      = null;
 let dialerCountdown  = 0;    
 let dialerActive     = false;
 let dialerPaused     = false;
+const DIALER_CALL_SECONDS = 40;
 const DIALER_EXTENSION_KEY = 'etalking_dialer_extension_' + crmUid;
 let dialerExtension  = (()=>{
     try{return localStorage.getItem(DIALER_EXTENSION_KEY)||'';}catch(e){return '';}
@@ -2419,7 +2420,7 @@ function dialerInit(queue) {
             <div style="background:#2f3640;border-radius:6px;height:8px;overflow:hidden;margin-bottom:6px;">
                 <div id="dialer-countdown-bar" style="height:100%;background:#e74c3c;width:100%;transition:width 1s linear;border-radius:6px;"></div>
             </div>
-            <div id="dialer-countdown-text" style="font-size:22px;font-weight:bold;color:#e74c3c;font-variant-numeric:tabular-nums;">35</div>
+            <div id="dialer-countdown-text" style="font-size:22px;font-weight:bold;color:#e74c3c;font-variant-numeric:tabular-nums;">${DIALER_CALL_SECONDS}</div>
             <div id="dialer-countdown-hint" style="font-size:10px;color:#636e72;margin-top:2px;height:14px;">秒後自動視為未接</div>
         </div>
 
@@ -2709,7 +2710,7 @@ function dialerStep() {
     const hintText = document.getElementById('dialer-countdown-hint');
     if(hintText) hintText.innerHTML = '秒後自動視為未接'; 
 
-    const SEC = 35;
+    const SEC = DIALER_CALL_SECONDS;
     dialerCountdown = SEC;
     dialerUpdateCountdown(SEC, SEC);
 
@@ -3023,7 +3024,7 @@ function dialerToggleMinimize() {
             <span id="mini-name" style="font-size:12px;font-weight:bold;color:#fff;white-space:nowrap;max-width:80px;overflow:hidden;text-overflow:ellipsis;">-</span>
             <span id="mini-phone" style="font-size:11px;color:#a4b0be;white-space:nowrap;">-</span>
             <span style="font-size:10px;color:#718093;white-space:nowrap;">⏱</span>
-            <span id="mini-countdown" style="font-size:13px;font-weight:bold;color:#e74c3c;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:36px;">00:35</span>
+            <span id="mini-countdown" style="font-size:13px;font-weight:bold;color:#e74c3c;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:36px;">00:${String(DIALER_CALL_SECONDS).padStart(2, '0')}</span>
             <div style="display:flex;gap:4px;margin-left:4px;">
                 <button id="mini-btn-answer" style="padding:4px 8px;border:none;border-radius:6px;background:#27ae60;color:white;font-weight:bold;font-size:12px;cursor:pointer;">✅</button>
                 <button id="mini-btn-miss" style="padding:4px 8px;border:none;border-radius:6px;background:#e74c3c;color:white;font-weight:bold;font-size:12px;cursor:pointer;">❌</button>
