@@ -75,11 +75,21 @@ async function guardFetch(url, options={}, timeoutMs=12000) {
 async function ensureLatestPanelVersion(){
     const now=Date.now();
     if(now-lastVersionGuardAt<GUARD_VERSION_CACHE_MS)return;
+    let res;
+    let text;
+    try{
+        res=await guardFetch(CRM_SCRIPT_CHECK_URL+'?crm_version_check='+now,{cache:'no-store'},12000);
+        text=await res.text();
+    }catch(e){
+        console.warn('[CRM 版本檢查暫時失敗，允許繼續寫入]',e);
+        return;
+    }
+    if(!res.ok){
+        console.warn('[CRM 版本檢查服務回應異常，允許繼續寫入]',res.status);
+        return;
+    }
     lastVersionGuardAt=now;
-
-    const res=await guardFetch(CRM_SCRIPT_CHECK_URL+'?crm_version_check='+now,{cache:'no-store'},12000);
-    const text=await res.text();
-    if(!res.ok||!text.includes(CRM_BUILD_ID)){
+    if(!text.includes(CRM_BUILD_ID)){
         throw new Error('CRM 面板已有新版，請關閉面板、重新整理後台，再點一次書籤');
     }
 }
@@ -99,14 +109,23 @@ function looksLikeMemberDetail(text, memberId){
 async function ensureBackendSession(memberId){
     const now=Date.now();
     if(now-lastBackendGuardAt<GUARD_SESSION_CACHE_MS)return;
-    lastBackendGuardAt=now;
-
     const checkId=memberId||232821;
-    const res=await guardFetch('/admin/request_develop?member_id='+encodeURIComponent(checkId)+'&hide_layout=true&crm_guard='+now,{cache:'no-store'},12000);
-    const text=await res.text();
-    if(!res.ok||!looksLikeMemberDetail(text, checkId)){
-        throw new Error('後台連線或登入狀態已失效，請重新整理後台並重新開啟 CRM 面板');
+    let lastError=null;
+    for(let attempt=0;attempt<2;attempt++){
+        try{
+            const res=await guardFetch('/admin/request_develop?member_id='+encodeURIComponent(checkId)+'&hide_layout=true&crm_guard='+Date.now(),{cache:'no-store'},12000);
+            const text=await res.text();
+            if(!res.ok||!looksLikeMemberDetail(text, checkId)){
+                throw new Error('後台回應異常或登入狀態已失效');
+            }
+            lastBackendGuardAt=Date.now();
+            return;
+        }catch(e){
+            lastError=e;
+            if(attempt===0)await new Promise(r=>setTimeout(r,500));
+        }
     }
+    throw new Error('無法確認後台登入狀態，紀錄尚未送出。請重新整理後台並重新開啟 CRM 面板。'+(lastError&&lastError.message?'（'+lastError.message+'）':''));
 }
 
 async function ensurePanelCanWrite(memberId){
@@ -2917,13 +2936,37 @@ async function countBackendRecords(memberId, expectedContent){
     return count;
 }
 
+async function countBackendRecordsBeforeSubmit(memberId,expectedContent){
+    let lastError=null;
+    for(let attempt=0;attempt<3;attempt++){
+        try{
+            return await countBackendRecords(memberId,expectedContent);
+        }catch(e){
+            lastError=e;
+            if(attempt<2)await new Promise(r=>setTimeout(r,500*(attempt+1)));
+        }
+    }
+    throw new Error('寫入前無法讀取聯繫歷史，紀錄尚未送出。請確認網路後再試。'+(lastError&&lastError.message?'（'+lastError.message+'）':''));
+}
+
+function markRecordErrorStage(error,stage){
+    const err=error instanceof Error?error:new Error(String(error||'未知錯誤'));
+    err.recordStage=stage;
+    return err;
+}
+
 async function submitBackendRecordAndVerify(memberId,params){
     const id=String(memberId||'');
-    if(!id)throw new Error('無法取得名單 ID');
-    await ensurePanelCanWrite(id);
+    if(!id)throw markRecordErrorStage(new Error('無法取得名單 ID'),'not-submitted');
 
     const expectedContent=String(params.content||'');
-    const beforeCount=await countBackendRecords(id,expectedContent);
+    let beforeCount;
+    try{
+        await ensurePanelCanWrite(id);
+        beforeCount=await countBackendRecordsBeforeSubmit(id,expectedContent);
+    }catch(e){
+        throw markRecordErrorStage(e,'not-submitted');
+    }
     const targetName='crm-record-save-'+Date.now()+'-'+Math.random().toString(36).slice(2);
     const iframe=document.createElement('iframe');
     iframe.name=targetName;
@@ -2945,7 +2988,11 @@ async function submitBackendRecordAndVerify(memberId,params){
     document.body.appendChild(iframe);
     document.body.appendChild(form);
     try{
-        form.submit();
+        try{
+            form.submit();
+        }catch(e){
+            throw markRecordErrorStage(new Error('表單送出失敗，紀錄尚未送出。'+(e.message?'（'+e.message+'）':'')),'not-submitted');
+        }
         let lastError=null;
         let observedCount=beforeCount;
         for(let attempt=0;attempt<12;attempt++){
@@ -2965,8 +3012,8 @@ async function submitBackendRecordAndVerify(memberId,params){
             beforeCount,
             observedCount
         });
-        if(lastError)throw new Error('紀錄已送出，但無法回讀歷史確認：'+(lastError.message||lastError));
-        throw new Error('紀錄已送出，但在歷史中尚未確認到新紀錄');
+        if(lastError)throw markRecordErrorStage(new Error('紀錄已送出，但無法回讀歷史確認：'+(lastError.message||lastError)),'submitted-unconfirmed');
+        throw markRecordErrorStage(new Error('紀錄已送出，但在歷史中尚未確認到新紀錄'),'submitted-unconfirmed');
     }finally{
         form.remove();
         iframe.remove();
@@ -2982,9 +3029,14 @@ function stopDialerForRecordError(error){
     }
     const statusEl=document.getElementById('dialer-status-label');
     const hintText=document.getElementById('dialer-countdown-hint');
-    if(statusEl)statusEl.innerText='紀錄寫入未確認，撥號流程已停止';
-    if(hintText)hintText.innerText='請先檢查歷史紀錄，避免重複寫入';
-    alert('紀錄寫入未確認，已停止自動切換。\n\n'+(error.message||error)+'\n\n請先檢查歷史紀錄，確認後再繼續，避免重複寫入。');
+    const wasSubmitted=error&&error.recordStage==='submitted-unconfirmed';
+    if(statusEl)statusEl.innerText=wasSubmitted?'紀錄已送出但未確認，撥號流程已停止':'紀錄尚未送出，撥號流程已停止';
+    if(hintText)hintText.innerText=wasSubmitted?'請先檢查歷史紀錄，避免重複寫入':'修正連線後可重新操作，不會造成重複紀錄';
+    if(wasSubmitted){
+        alert('紀錄已送出但無法確認，已停止自動切換。\n\n'+(error.message||error)+'\n\n請先檢查歷史紀錄，確認後再繼續，避免重複寫入。');
+    }else{
+        alert('紀錄尚未送出，已停止自動切換。\n\n'+(error.message||error)+'\n\n修正連線或重新整理後台後，可以重新操作。');
+    }
 }
 
 async function dialerOnMiss(isManual) {
