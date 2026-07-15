@@ -2910,10 +2910,9 @@ async function countBackendRecords(memberId, expectedContent){
     let count=0;
     doc.querySelectorAll('table tbody tr').forEach(row=>{
         const cells=row.querySelectorAll('td');
-        if(cells.length<5)return;
-        const type=cells[3]?cells[3].innerText.trim():'';
-        const content=cells[4]?cells[4].innerText.trim():'';
-        if(type.includes('聯絡')&&normalizeLogText(content)===expected)count++;
+        if(!cells.length)return;
+        const rowText=Array.from(cells).map(cell=>cell.innerText||'').join(' ');
+        if(expected&&normalizeLogText(rowText).includes(expected))count++;
     });
     return count;
 }
@@ -2948,16 +2947,24 @@ async function submitBackendRecordAndVerify(memberId,params){
     try{
         form.submit();
         let lastError=null;
-        for(let attempt=0;attempt<8;attempt++){
+        let observedCount=beforeCount;
+        for(let attempt=0;attempt<12;attempt++){
             await new Promise(r=>setTimeout(r,attempt===0?500:750));
             try{
                 const currentCount=await countBackendRecords(id,expectedContent);
                 if(currentCount>beforeCount)return true;
+                observedCount=currentCount;
                 lastError=null;
             }catch(e){
                 lastError=e;
             }
         }
+        console.warn('[紀錄寫入驗證未通過]',{
+            memberId:id,
+            expectedLength:normalizeLogText(expectedContent).length,
+            beforeCount,
+            observedCount
+        });
         if(lastError)throw new Error('紀錄已送出，但無法回讀歷史確認：'+(lastError.message||lastError));
         throw new Error('紀錄已送出，但在歷史中尚未確認到新紀錄');
     }finally{
