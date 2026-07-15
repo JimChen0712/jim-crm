@@ -599,7 +599,7 @@ historyOverlay.innerHTML=`
             <span id="contact-history-updated" style="font-size:11px;color:#7f8c8d;">點擊後才會載入系統紀錄</span>
             <button id="contact-history-refresh" style="padding:5px 10px;border:1px solid #3498db;border-radius:4px;background:#fff;color:#2980b9;cursor:pointer;font-size:11px;font-weight:bold;">重新整理</button>
         </div>
-        <div id="contact-history-body" style="padding:14px;overflow-y:auto;min-height:180px;background:#f4f6f7;flex:1;"></div>
+        <div id="contact-history-body" style="padding:10px 12px;overflow:auto;min-height:180px;background:#1e272e;flex:1;"></div>
         <div style="padding:10px 14px;border-top:1px solid #e5e8eb;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">
             <span id="contact-history-count" style="font-size:11px;color:#7f8c8d;"></span>
             <button id="contact-history-toggle" style="display:none;padding:5px 12px;border:1px solid #bdc3c7;border-radius:4px;background:#fff;color:#555;cursor:pointer;font-size:11px;font-weight:bold;">顯示全部</button>
@@ -765,7 +765,7 @@ function renderContactHistory(entry){
 
     if(!entry||!entry.logs.length){
         const empty=document.createElement('div');
-        empty.style.cssText='padding:40px 15px;text-align:center;color:#95a5a6;font-size:13px;';
+        empty.style.cssText='padding:40px 15px;text-align:center;color:#718093;font-size:13px;';
         empty.textContent='目前找不到可顯示的聯繫歷史。';
         body.appendChild(empty);
         count.textContent='共 0 筆紀錄';
@@ -774,35 +774,67 @@ function renderContactHistory(entry){
     }
 
     const visibleLogs=historyShowAll?entry.logs:entry.logs.slice(0,20);
-    visibleLogs.forEach(log=>{
-        const card=document.createElement('div');
-        card.style.cssText='background:#fff;border:1px solid #e1e5e8;border-left:4px solid '+getHistoryTypeColor(log.type)+';border-radius:6px;padding:10px 12px;margin-bottom:9px;box-shadow:0 1px 2px rgba(0,0,0,0.04);';
+    const table=document.createElement('table');
+    table.style.cssText='width:100%;min-width:620px;border-collapse:collapse;font-size:11px;';
+    const thead=document.createElement('thead');
+    const headRow=document.createElement('tr');
+    headRow.style.cssText='background:#2f3640;color:#a4b0be;position:sticky;top:0;z-index:1;';
+    ['#','時間','類型','內容','操作者'].forEach((label,index)=>{
+        const th=document.createElement('th');
+        th.style.cssText='padding:6px;text-align:left;'+(index!==3?'white-space:nowrap;':'');
+        th.textContent=label;
+        headRow.appendChild(th);
+    });
+    thead.appendChild(headRow);
+    table.appendChild(thead);
 
-        const top=document.createElement('div');
-        top.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px;';
-        const type=document.createElement('span');
-        type.style.cssText='font-size:11px;font-weight:bold;color:'+getHistoryTypeColor(log.type)+';';
+    const tbody=document.createElement('tbody');
+    visibleLogs.forEach((log,index)=>{
+        const tr=document.createElement('tr');
+        tr.style.cssText='background:'+(index%2===0?'#1e272e':'#252f38')+';border-bottom:1px solid #2f3640;';
+
+        const num=document.createElement('td');
+        num.style.cssText='padding:6px;color:#636e72;white-space:nowrap;vertical-align:top;';
+        num.textContent=log.num||String(index+1);
+
+        const time=document.createElement('td');
+        time.style.cssText='padding:6px;color:#718093;white-space:nowrap;font-size:10px;vertical-align:top;';
+        time.textContent=log.date||'-';
+
+        const type=document.createElement('td');
+        type.style.cssText='padding:6px;color:'+getHistoryTypeColor(log.type)+';white-space:nowrap;vertical-align:top;font-weight:bold;';
         type.textContent=log.type||'系統紀錄';
-        const date=document.createElement('span');
-        date.style.cssText='font-size:11px;color:#7f8c8d;text-align:right;white-space:nowrap;';
-        date.textContent=log.date||'日期未記錄';
-        top.appendChild(type);
-        top.appendChild(date);
-        card.appendChild(top);
 
-        const contentEl=document.createElement('div');
-        contentEl.style.cssText='font-size:13px;line-height:1.55;color:#2c3e50;white-space:pre-wrap;word-break:break-word;';
-        contentEl.textContent=log.content||'（無內容）';
-        card.appendChild(contentEl);
-
+        const contentCell=document.createElement('td');
+        contentCell.style.cssText='padding:6px;word-break:break-word;line-height:1.5;vertical-align:top;';
+        const contentText=document.createElement('div');
+        const content=log.content||'（無內容）';
+        let contentColor='#dcdde1';
+        if(content.includes('未接'))contentColor='#e74c3c';
+        if(content.includes('已接')||content.includes('【'))contentColor='#2ecc71';
+        contentText.style.cssText='color:'+contentColor+';white-space:pre-wrap;';
+        contentText.textContent=content;
+        contentCell.appendChild(contentText);
         if(log.nextTime&&!log.nextTime.includes('0000')){
             const next=document.createElement('div');
-            next.style.cssText='font-size:11px;color:#d35400;margin-top:7px;padding-top:6px;border-top:1px dashed #eee;';
+            next.style.cssText='font-size:10px;color:#f39c12;margin-top:4px;';
             next.textContent='下次聯繫：'+log.nextTime;
-            card.appendChild(next);
+            contentCell.appendChild(next);
         }
-        body.appendChild(card);
+
+        const operator=document.createElement('td');
+        operator.style.cssText='padding:6px;color:#636e72;white-space:nowrap;font-size:10px;vertical-align:top;';
+        operator.textContent=log.operator||'-';
+
+        tr.appendChild(num);
+        tr.appendChild(time);
+        tr.appendChild(type);
+        tr.appendChild(contentCell);
+        tr.appendChild(operator);
+        tbody.appendChild(tr);
     });
+    table.appendChild(tbody);
+    body.appendChild(table);
 
     count.textContent='顯示 '+visibleLogs.length+' 筆，共 '+entry.logs.length+' 筆紀錄';
     if(entry.logs.length>20){
@@ -842,12 +874,14 @@ async function loadContactHistory(memberId, forceRefresh=false){
         doc.querySelectorAll('table tbody tr').forEach(row=>{
             const cells=row.querySelectorAll('td');
             if(cells.length<4)return;
+            const num=cells[0]?cells[0].innerText.trim():'';
             const type=cells[3]?cells[3].innerText.trim():'';
             const content=cells[4]?cells[4].innerText.trim():'';
             const date=cells[1]?cells[1].innerText.trim():'';
             const nextTime=cells[2]?cells[2].innerText.trim():'';
+            const operator=cells.length>5&&cells[cells.length-1]?cells[cells.length-1].innerText.trim():'';
             if(!type&&!content&&!date)return;
-            logs.push({type,content,date,nextTime});
+            logs.push({num,type,content,date,nextTime,operator});
         });
 
         const entry={logs,fetchedAt:new Date().toLocaleString('zh-TW')};
