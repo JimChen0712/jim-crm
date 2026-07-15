@@ -1289,7 +1289,14 @@ function renderList(){
         const batchCell = isManager ? '<td style="padding:6px;text-align:center;vertical-align:top;"><input type="checkbox" class="row-cb" value="'+id+'" style="cursor:pointer;"></td>' : '';
         const hasPhone=!!String(item.mobile||'').trim();
         const nameTools='<span style="display:inline-flex;align-items:center;gap:8px;margin-left:6px;vertical-align:middle;">' +
-            '<button class="history-btn" data-id="'+id+'" title="查看聯繫歷史" aria-label="查看聯繫歷史" style="width:24px;height:22px;padding:0;border:1px solid #b2babb;border-radius:50%;background:#f2f3f4;color:#7b7d7d;cursor:pointer;font-size:11px;font-weight:bold;line-height:20px;">H</button>' +
+            '<button class="history-btn" data-id="'+id+'" title="查看聯繫歷史" aria-label="查看聯繫歷史" style="width:24px;height:22px;padding:0;border:1px solid #b2babb;border-radius:50%;background:#f2f3f4;color:#707b7c;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">' +
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                    '<path d="M13 3h5a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-8"/>' +
+                    '<path d="M11 11h6M9 15h8M9 19h6"/>' +
+                    '<circle cx="6" cy="6" r="4.5" fill="#f2f3f4"/>' +
+                    '<path d="M6 3.8v2.5l1.8 1"/>' +
+                '</svg>' +
+            '</button>' +
             '<button class="single-dial-btn" data-id="'+id+'" title="'+(hasPhone?'撥打此名單':'沒有電話號碼')+'" '+(hasPhone?'':'disabled')+' style="width:24px;height:22px;padding:0;border:1px solid '+(hasPhone?'#27ae60':'#bdc3c7')+';border-radius:50%;background:'+(hasPhone?'#eafaf1':'#f2f3f4')+';color:'+(hasPhone?'#1e8449':'#aab7b8')+';cursor:'+(hasPhone?'pointer':'not-allowed')+';font-size:12px;line-height:20px;">📞</button>' +
             '</span>';
 
