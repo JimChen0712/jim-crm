@@ -1909,37 +1909,98 @@ if(isManager){
                 alert('目前沒有已載入的常態名單可以同步！請先點擊「同步名單細節」。');
                 return;
             }
-            if(!confirm('即將同步 ' + targets.length + ' 筆常態單的觸及率到 Google Sheet，預計需要 ' + targets.length + ' 秒。期間請勿關閉網頁。確定嗎？')) return;
-            
-            bulkSyncBtn.disabled=true; bulkSyncBtn.style.background='#95a5a6';
-            
-            for(let i=0; i<targets.length; i++){
-                bulkSyncBtn.innerText = `同步中 (${i+1}/${targets.length})`;
-                const item = targets[i];
-                const id = item.member_id || item.id;
+            const pending = [];
+            let unchangedCount = 0;
+            let missingCount = 0;
+
+            targets.forEach(item => {
+                const id = String(item.member_id || item.id);
                 const sd = sheetData[id];
-                if (sd) {
-                    const now = new Date();
-                    const timeStr = now.toLocaleString('zh-TW');
-                    const contactRate = detailData[id].contactRate || '';
-                    const rowNum = sheetRowMap[id];
-                    if(rowNum) {
+                const rowNum = sheetRowMap[id];
+                const contactRate = detailData[id].contactRate || '';
+
+                if (!sd || !rowNum) {
+                    missingCount++;
+                    return;
+                }
+                if ((sd.contactRate || '') === contactRate) {
+                    unchangedCount++;
+                    return;
+                }
+                pending.push({ id, sd, rowNum, contactRate });
+            });
+
+            if (!pending.length) {
+                alert('✅ 已檢查 ' + targets.length + ' 筆常態單，沒有需要寫入的觸及率。' +
+                    (unchangedCount ? '\n無變化：' + unchangedCount + ' 筆' : '') +
+                    (missingCount ? '\n⚠️ ' + missingCount + ' 筆在 Google Sheet 找不到對應資料。' : ''));
+                return;
+            }
+
+            if(!confirm('已檢查 ' + targets.length + ' 筆常態單，其中 ' + pending.length + ' 筆觸及率有變化，即將寫入 Google Sheet。\n\n寫入期間請勿關閉網頁。確定嗎？')) return;
+
+            bulkSyncBtn.disabled=true; bulkSyncBtn.style.background='#95a5a6';
+            let successCount = 0;
+            let failedCount = 0;
+            let abortedError = null;
+            const failedItems = [];
+            const maxAttempts = 3;
+
+            try {
+                for(let i=0; i<pending.length; i++){
+                    const task = pending[i];
+                    let lastError = null;
+
+                    for(let attempt=1; attempt<=maxAttempts; attempt++){
+                        bulkSyncBtn.innerText = `同步中 (${i+1}/${pending.length})` + (attempt > 1 ? ` 重試 ${attempt}/${maxAttempts}` : '');
                         try {
-                            await ensurePanelCanWrite(id);
-                            await updateRow(rowNum, [sd.status, sd.grade, sd.memo, timeStr, contactRate]);
-                            sd.contactRate = contactRate;
-                        } catch(e) {
-                            console.error('Batch update row failed', id, e);
-                            notifyGuardError(e);
+                            await ensurePanelCanWrite(task.id);
+                            const timeStr = new Date().toLocaleString('zh-TW');
+                            await updateRow(task.rowNum, [task.sd.status, task.sd.grade, task.sd.memo, timeStr, task.contactRate]);
+                            task.sd.contactRate = task.contactRate;
+                            successCount++;
+                            lastError = null;
                             break;
+                        } catch(e) {
+                            lastError = e;
+                            const message = e && e.message ? e.message : String(e || '');
+                            const mustStop = message.includes('超過 2 小時') ||
+                                message.includes('面板已有新版') ||
+                                message.includes('登入狀態已失效');
+                            console.error('Batch update row failed', task.id, 'attempt', attempt, e);
+                            if (mustStop) {
+                                abortedError = e;
+                                break;
+                            }
+                            if (attempt < maxAttempts) {
+                                await new Promise(r => setTimeout(r, attempt * 1500));
+                            }
                         }
                     }
+
+                    if (abortedError) break;
+                    if (lastError) {
+                        failedCount++;
+                        failedItems.push({ id: task.id, error: lastError.message || String(lastError) });
+                    }
+                    await new Promise(r => setTimeout(r, 1000));
                 }
-                await new Promise(r => setTimeout(r, 1000));
+            } finally {
+                bulkSyncBtn.disabled=false;
+                bulkSyncBtn.style.background='#16a085';
+                bulkSyncBtn.innerText='同步常態單觸及率';
             }
-            
-            bulkSyncBtn.disabled=false; bulkSyncBtn.style.background='#16a085'; bulkSyncBtn.innerText='同步常態單觸及率';
-            alert('✅ 同步完成！');
+
+            if (failedItems.length) console.warn('[觸及率同步] 重試後仍失敗的名單', failedItems);
+            if (abortedError) {
+                notifyGuardError(abortedError);
+                alert('觸及率同步已停止。\n\n已更新：' + successCount + ' 筆\n未寫入：' + (pending.length - successCount) + ' 筆\n\n' + (abortedError.message || abortedError));
+                return;
+            }
+
+            alert('✅ 觸及率同步完成\n\n成功更新：' + successCount + ' 筆\n無變化：' + unchangedCount + ' 筆\n寫入失敗：' + failedCount + ' 筆' +
+                (missingCount ? '\nSheet 無對應資料：' + missingCount + ' 筆' : '') +
+                (failedCount ? '\n\n失敗名單已記錄在 Console，可再次點擊同步只重跑未成功的資料。' : ''));
         };
     }
 }
