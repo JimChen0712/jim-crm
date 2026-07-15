@@ -1287,8 +1287,13 @@ function renderList(){
         }
 
         const batchCell = isManager ? '<td style="padding:6px;text-align:center;vertical-align:top;"><input type="checkbox" class="row-cb" value="'+id+'" style="cursor:pointer;"></td>' : '';
+        const hasPhone=!!String(item.mobile||'').trim();
+        const nameTools='<span style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;vertical-align:middle;">' +
+            '<button class="history-btn" data-id="'+id+'" title="查看聯繫歷史" style="padding:1px 6px;border:1px solid #7f8c8d;border-radius:4px;background:#fff;color:#566573;cursor:pointer;font-size:9px;font-weight:bold;line-height:18px;letter-spacing:0.3px;">HISTORY</button>' +
+            '<button class="single-dial-btn" data-id="'+id+'" title="'+(hasPhone?'撥打此名單':'沒有電話號碼')+'" '+(hasPhone?'':'disabled')+' style="width:24px;height:22px;padding:0;border:1px solid '+(hasPhone?'#27ae60':'#bdc3c7')+';border-radius:50%;background:'+(hasPhone?'#eafaf1':'#f2f3f4')+';color:'+(hasPhone?'#1e8449':'#aab7b8')+';cursor:'+(hasPhone?'pointer':'not-allowed')+';font-size:12px;line-height:20px;">📞</button>' +
+            '</span>';
 
-        html+='<tr style="border-bottom:1px solid #dee2e6;border-left:4px solid '+rowBorderColor+';">' + batchCell + '<td style="padding:6px;vertical-align:top;"><b>'+(item.member_name||'未知')+'</b><br><span style="background:'+ts.bg+';color:white;padding:1px 5px;border-radius:3px;font-size:10px;">'+ts.label+'</span>'+reInquireHtml+progressHtml+'</td><td style="padding:6px;vertical-align:top;">'+(item.mobile||'-')+'</td><td style="padding:6px;vertical-align:top;">'+gradeHtml+'</td><td style="padding:6px;vertical-align:top;">'+memoHtml+'</td><td style="padding:6px;vertical-align:top;"><span style="color:#d35400;">'+(item.type==2 && d ? (d.lastLogNextTime || d.normalDate || '無紀錄') : (item.next_time&&!item.next_time.includes('0000')?item.next_time.split(' ')[0]:'無紀錄'))+'</span>'+warningHtml+'</td>'+sourceCell+'<td style="padding:6px;color:#7f8c8d;vertical-align:top;font-size:11px;">'+displayUserName+'</td><td style="padding:6px;vertical-align:top;"><button class="quick-record-btn" data-id="'+id+'" style="padding:4px 8px;background:'+btnBg+';color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">壓紀錄</button><button class="history-btn" data-id="'+id+'" style="margin-top:4px;padding:4px 8px;background:#34495e;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">聯繫歷史</button><button class="quick-release-btn" data-id="'+id+'" style="margin-top:4px;padding:4px 8px;background:#c0392b;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">釋出</button></td></tr>';
+        html+='<tr style="border-bottom:1px solid #dee2e6;border-left:4px solid '+rowBorderColor+';">' + batchCell + '<td style="padding:6px;vertical-align:top;"><b>'+(item.member_name||'未知')+'</b>'+nameTools+'<br><span style="background:'+ts.bg+';color:white;padding:1px 5px;border-radius:3px;font-size:10px;">'+ts.label+'</span>'+reInquireHtml+progressHtml+'</td><td style="padding:6px;vertical-align:top;">'+(item.mobile||'-')+'</td><td style="padding:6px;vertical-align:top;">'+gradeHtml+'</td><td style="padding:6px;vertical-align:top;">'+memoHtml+'</td><td style="padding:6px;vertical-align:top;"><span style="color:#d35400;">'+(item.type==2 && d ? (d.lastLogNextTime || d.normalDate || '無紀錄') : (item.next_time&&!item.next_time.includes('0000')?item.next_time.split(' ')[0]:'無紀錄'))+'</span>'+warningHtml+'</td>'+sourceCell+'<td style="padding:6px;color:#7f8c8d;vertical-align:top;font-size:11px;">'+displayUserName+'</td><td style="padding:6px;vertical-align:top;"><button class="quick-record-btn" data-id="'+id+'" style="padding:4px 8px;background:'+btnBg+';color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">壓紀錄</button><button class="quick-release-btn" data-id="'+id+'" style="margin-top:4px;padding:4px 8px;background:#c0392b;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">釋出</button></td></tr>';
     });
 
     html+='</table></div>';
@@ -1429,6 +1434,16 @@ function renderList(){
             const memberId=e.currentTarget.getAttribute('data-id');
             const item=allData.find(m=>(m.member_id||m.id)==memberId);
             if(item)openContactHistory(item);
+        };
+    });
+
+    document.querySelectorAll('.single-dial-btn:not([disabled])').forEach(btn=>{
+        btn.onclick=e=>{
+            const memberId=e.currentTarget.getAttribute('data-id');
+            const item=allData.find(m=>(m.member_id||m.id)==memberId);
+            if(!item)return;
+            if(dialerActive&&!confirm('目前撥號流程尚未結束，確定要改為撥打「'+(item.member_name||'這筆名單')+'」嗎？'))return;
+            dialerInit([item]);
         };
     });
 
