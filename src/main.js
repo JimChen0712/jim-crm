@@ -2891,7 +2891,86 @@ function dialerOnAnswer() {
 
 }
 
-function dialerOnMiss(isManual) {
+async function countBackendRecords(memberId, expectedContent){
+    const res=await guardFetch('/admin/request_develop?member_id='+encodeURIComponent(memberId)+'&hide_layout=true&crm_record_verify='+Date.now(),{cache:'no-store'},12000);
+    const html=await res.text();
+    if(!res.ok||!looksLikeMemberDetail(html,memberId))throw new Error('後台連線或登入狀態已失效');
+    const expected=normalizeLogText(expectedContent);
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    let count=0;
+    doc.querySelectorAll('table tbody tr').forEach(row=>{
+        const cells=row.querySelectorAll('td');
+        if(cells.length<5)return;
+        const type=cells[3]?cells[3].innerText.trim():'';
+        const content=cells[4]?cells[4].innerText.trim():'';
+        if(type.includes('聯絡')&&normalizeLogText(content)===expected)count++;
+    });
+    return count;
+}
+
+async function submitBackendRecordAndVerify(memberId,params){
+    const id=String(memberId||'');
+    if(!id)throw new Error('無法取得名單 ID');
+    await ensurePanelCanWrite(id);
+
+    const expectedContent=String(params.content||'');
+    const beforeCount=await countBackendRecords(id,expectedContent);
+    const targetName='crm-record-save-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+    const iframe=document.createElement('iframe');
+    iframe.name=targetName;
+    iframe.style.display='none';
+    iframe.sandbox='allow-forms allow-same-origin';
+    const form=document.createElement('form');
+    form.target=targetName;
+    form.method='POST';
+    form.action='https://www.etalkingonline.com/admin/request_develop/save';
+
+    Object.keys(params).forEach(key=>{
+        const input=document.createElement('input');
+        input.type='hidden';
+        input.name=key;
+        input.value=params[key];
+        form.appendChild(input);
+    });
+
+    document.body.appendChild(iframe);
+    document.body.appendChild(form);
+    try{
+        form.submit();
+        let lastError=null;
+        for(let attempt=0;attempt<8;attempt++){
+            await new Promise(r=>setTimeout(r,attempt===0?500:750));
+            try{
+                const currentCount=await countBackendRecords(id,expectedContent);
+                if(currentCount>beforeCount)return true;
+                lastError=null;
+            }catch(e){
+                lastError=e;
+            }
+        }
+        if(lastError)throw new Error('紀錄已送出，但無法回讀歷史確認：'+(lastError.message||lastError));
+        throw new Error('紀錄已送出，但在歷史中尚未確認到新紀錄');
+    }finally{
+        form.remove();
+        iframe.remove();
+    }
+}
+
+function stopDialerForRecordError(error){
+    dialerCallReady=false;
+    setDialerCallActionsReady(false);
+    if(dialerPanel){
+        dialerPanel.style.border='2px solid #e74c3c';
+        dialerPanel.classList.remove('dialer-warning-pulse');
+    }
+    const statusEl=document.getElementById('dialer-status-label');
+    const hintText=document.getElementById('dialer-countdown-hint');
+    if(statusEl)statusEl.innerText='紀錄寫入未確認，撥號流程已停止';
+    if(hintText)hintText.innerText='請先檢查歷史紀錄，避免重複寫入';
+    alert('紀錄寫入未確認，已停止自動切換。\n\n'+(error.message||error)+'\n\n請先檢查歷史紀錄，確認後再繼續，避免重複寫入。');
+}
+
+async function dialerOnMiss(isManual) {
     if(!dialerActive) return;
     if(dialerPaused) return; 
     if(!dialerCallReady) return;
@@ -2918,17 +2997,21 @@ function dialerOnMiss(isManual) {
     const statusEl = document.getElementById('dialer-status-label');
     if(statusEl) statusEl.innerText = (isManual ? '手動標記未接' : '逾時未接') + `，正在寫入未接 *${n}...`;
 
-    dialerAutoRecord(item, n, '未接').then(() => {
-        setTimeout(() => {
-            if(n < 2){
-                dialerCallAttempt = 2;
-                dialerStep({sameMember:true});
-            }else{
-                dialerIndex++;
-                dialerStep();
-            }
-        }, 600);
-    });
+    try{
+        await dialerAutoRecord(item,n,'未接');
+    }catch(e){
+        console.error('[自動未接紀錄寫入失敗]',e);
+        stopDialerForRecordError(e);
+        return;
+    }
+
+    if(n<2){
+        dialerCallAttempt=2;
+        dialerStep({sameMember:true});
+    }else{
+        dialerIndex++;
+        dialerStep();
+    }
 }
 
 async function dialerOnSkip() {
@@ -2951,8 +3034,13 @@ async function dialerOnSkip() {
     if(shouldWriteVoice){
         const statusEl=document.getElementById('dialer-status-label');
         if(statusEl)statusEl.innerText='正在寫入語音 *'+voiceCount+'...';
-        await dialerAutoRecord(item,voiceCount,'語音');
-        await new Promise(r=>setTimeout(r,600));
+        try{
+            await dialerAutoRecord(item,voiceCount,'語音');
+        }catch(e){
+            console.error('[語音紀錄寫入失敗]',e);
+            stopDialerForRecordError(e);
+            return;
+        }
     }
     dialerIndex++;
     dialerStep();
@@ -2965,50 +3053,25 @@ async function dialerAutoRecord(item, attemptCount, resultLabel='未接') {
         return d.toISOString().split('T')[0];
     })();
 
-    const memberId = item.member_id;
+    const memberId = item.member_id||item.id;
     const content  = `${resultLabel} *${attemptCount}`;
-
-    try {
-        let iframe = document.getElementById('hidden-save-frame');
-        if(!iframe){
-            iframe=document.createElement('iframe');
-            iframe.name='hidden-save-frame';iframe.id='hidden-save-frame';iframe.style.display='none';iframe.sandbox='allow-forms allow-same-origin';
-            document.body.appendChild(iframe);
-        }
-
-        const form = document.createElement('form');
-        form.target = 'hidden-save-frame';
-        form.method = 'POST';
-        form.action = 'https://www.etalkingonline.com/admin/request_develop/save';
-
-        const params = {
-            'current_member_id': memberId,
-            'contact_status':    '3',
-            'content':           content,
-            'sub_content':       '',
-            'search_begin':      nextDate,
-            'time':              '12:00:00',
-            'consultant_type':   '10',
-            'type':              '20'
-        };
-        for(let k in params){
-            let i = document.createElement('input');
-            i.type='hidden'; i.name=k; i.value=params[k];
-            form.appendChild(i);
-        }
-        document.body.appendChild(form);
-        form.submit();
-        setTimeout(()=>form.remove(), 500);
-    } catch(e) {
-        console.error('[自動壓紀錄失敗]', e);
-    }
+    await submitBackendRecordAndVerify(memberId,{
+        'current_member_id':memberId,
+        'contact_status':'3',
+        'content':content,
+        'sub_content':'',
+        'search_begin':nextDate,
+        'time':'12:00:00',
+        'consultant_type':'10',
+        'type':'20'
+    });
 }
 
-function dialerSubmitRecord(isAnswer) {
+async function dialerSubmitRecord(isAnswer) {
     const item = dialerQueue[dialerIndex];
     if(!item) return;
 
-    const memberId    = item.member_id;
+    const memberId    = item.member_id||item.id;
     const content     = document.getElementById('dialer-interview-text').value;
     const nextDate    = document.getElementById('dialer-next-date').value;
     const submitBtn   = document.getElementById('dialer-btn-submit');
@@ -3017,19 +3080,7 @@ function dialerSubmitRecord(isAnswer) {
     if(submitBtn) { submitBtn.innerText = '送出中...'; submitBtn.disabled = true; }
 
     try {
-        let iframe = document.getElementById('hidden-save-frame');
-        if(!iframe){
-            iframe=document.createElement('iframe');
-            iframe.name='hidden-save-frame';iframe.id='hidden-save-frame';iframe.style.display='none';iframe.sandbox='allow-forms allow-same-origin';
-            document.body.appendChild(iframe);
-        }
-
-        const form = document.createElement('form');
-        form.target = 'hidden-save-frame';
-        form.method = 'POST';
-        form.action = 'https://www.etalkingonline.com/admin/request_develop/save';
-
-        const params = {
+        await submitBackendRecordAndVerify(memberId,{
             'current_member_id': memberId,
             'contact_status':    '1',
             'content':           content,
@@ -3038,31 +3089,20 @@ function dialerSubmitRecord(isAnswer) {
             'time':              '12:00:00',
             'consultant_type':   '10',
             'type':              '20'
-        };
-        for(let k in params){
-            let i = document.createElement('input');
-            i.type='hidden'; i.name=k; i.value=params[k];
-            form.appendChild(i);
-        }
-        document.body.appendChild(form);
-        form.submit();
-        setTimeout(()=>form.remove(), 500);
-
-        setTimeout(() => {
-            if(submitBtn) { submitBtn.innerText = '壓紀錄'; submitBtn.disabled = false; }
-            alert('✅ 紀錄已送出！');
-
-            setLocalContacted(memberId, false);
-            
-            if (currentTab === 'pool' && typeof renderPoolList === 'function') {
-                renderPoolList();
-            } else if (typeof renderList === 'function') {
-                renderList();
-            }
-        }, 800);
-    } catch(e) {
-        console.error('[壓紀錄失敗]', e);
+        });
         if(submitBtn) { submitBtn.innerText = '壓紀錄'; submitBtn.disabled = false; }
+        alert('紀錄已寫入並確認成功！');
+
+        setLocalContacted(memberId, false);
+        if (currentTab === 'pool' && typeof renderPoolList === 'function') {
+            renderPoolList();
+        } else if (typeof renderList === 'function') {
+            renderList();
+        }
+    } catch(e) {
+        console.error('[已接聽紀錄寫入失敗]', e);
+        if(submitBtn) { submitBtn.innerText = '壓紀錄'; submitBtn.disabled = false; }
+        stopDialerForRecordError(e);
     }
 }
 
