@@ -1289,7 +1289,7 @@ function renderList(){
         const batchCell = isManager ? '<td style="padding:6px;text-align:center;vertical-align:top;"><input type="checkbox" class="row-cb" value="'+id+'" style="cursor:pointer;"></td>' : '';
         const hasPhone=!!String(item.mobile||'').trim();
         const nameTools='<span style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;vertical-align:middle;">' +
-            '<button class="history-btn" data-id="'+id+'" title="查看聯繫歷史" style="padding:1px 6px;border:1px solid #7f8c8d;border-radius:4px;background:#fff;color:#566573;cursor:pointer;font-size:9px;font-weight:bold;line-height:18px;letter-spacing:0.3px;">HISTORY</button>' +
+            '<button class="history-btn" data-id="'+id+'" title="查看聯繫歷史" aria-label="查看聯繫歷史" style="width:24px;height:22px;padding:0;border:1px solid #5d6d7e;border-radius:50%;background:#f4f6f7;color:#34495e;cursor:pointer;font-size:11px;font-weight:bold;line-height:20px;">H</button>' +
             '<button class="single-dial-btn" data-id="'+id+'" title="'+(hasPhone?'撥打此名單':'沒有電話號碼')+'" '+(hasPhone?'':'disabled')+' style="width:24px;height:22px;padding:0;border:1px solid '+(hasPhone?'#27ae60':'#bdc3c7')+';border-radius:50%;background:'+(hasPhone?'#eafaf1':'#f2f3f4')+';color:'+(hasPhone?'#1e8449':'#aab7b8')+';cursor:'+(hasPhone?'pointer':'not-allowed')+';font-size:12px;line-height:20px;">📞</button>' +
             '</span>';
 
@@ -2219,7 +2219,10 @@ let dialerTimer      = null;
 let dialerCountdown  = 0;    
 let dialerActive     = false;
 let dialerPaused     = false;
-let dialerExtension  = '';   
+const DIALER_EXTENSION_KEY = 'etalking_dialer_extension_' + crmUid;
+let dialerExtension  = (()=>{
+    try{return localStorage.getItem(DIALER_EXTENSION_KEY)||'';}catch(e){return '';}
+})();
 let dialerMissCount  = {};   
 let dialerTickInterval = null;
 let dialerPendingPause = false; 
@@ -2255,10 +2258,13 @@ function dialerInit(queue) {
         return;
     }
 
-    const ext = prompt('請輸入您的分機號碼：', dialerExtension || '');
-    if(ext === null) return; 
-    if(!ext.trim()) { alert('⚠️ 分機號碼不能為空！'); return; }
-    dialerExtension = ext.trim();
+    if(!dialerExtension){
+        const ext = prompt('請輸入您的分機號碼：', '');
+        if(ext === null) return;
+        if(!ext.trim()) { alert('⚠️ 分機號碼不能為空！'); return; }
+        dialerExtension = ext.trim();
+        try{localStorage.setItem(DIALER_EXTENSION_KEY,dialerExtension);}catch(e){}
+    }
 
     dialerQueue     = queue;
     dialerIndex     = 0;
@@ -2526,6 +2532,7 @@ function dialerInit(queue) {
         const newExt = prompt('修改分機號碼：', dialerExtension);
         if(newExt !== null && newExt.trim()) {
             dialerExtension = newExt.trim();
+            try{localStorage.setItem(DIALER_EXTENSION_KEY,dialerExtension);}catch(e){}
             document.getElementById('dialer-ext-display').innerText = dialerExtension;
         }
     };
