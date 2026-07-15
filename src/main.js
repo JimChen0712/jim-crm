@@ -2713,6 +2713,7 @@ function dialerStep() {
     dialerCountdown = SEC;
     dialerUpdateCountdown(SEC, SEC);
 
+    dialerOpenHistory(item);
     dialerCallApi(item);
 
     dialerTickInterval = setInterval(() => {
@@ -2825,8 +2826,6 @@ function dialerOnAnswer() {
         nextDateInput.value = d.toISOString().split('T')[0];
     }
 
-    const item = dialerQueue[dialerIndex];
-    if(item) dialerOpenHistory(item);
 }
 
 function dialerOnMiss(isManual) {
