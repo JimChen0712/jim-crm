@@ -2446,10 +2446,10 @@ function dialerInit(queue) {
                 cursor:pointer;white-space:nowrap;
             ">重新撥號</button>
             <button id="dialer-btn-skip" title="轉語音後切換下一通" style="
-                padding:10px 8px;border:none;border-radius:8px;
-                background:#636e72;color:white;font-weight:bold;font-size:12px;
-                cursor:pointer;
-            ">下一通</button>
+                padding:10px 5px;border:none;border-radius:8px;
+                background:#636e72;color:white;font-weight:bold;font-size:10px;
+                cursor:pointer;white-space:nowrap;
+            ">語音／下一通</button>
             <button id="dialer-btn-pause" style="
                 padding:10px 8px;border:none;border-radius:8px;
                 background:#8e44ad;color:white;font-weight:bold;font-size:12px;
@@ -2634,7 +2634,7 @@ async function dialerStep({sameMember=false}={}) {
         btnSkip.style.border = 'none';
         btnSkip.style.color = 'white';
         btnSkip.style.cursor = 'pointer';
-        btnSkip.innerText = '下一通';
+        btnSkip.innerText = '語音／下一通';
     }
     const miniBtnSkip = document.getElementById('mini-btn-skip');
     if(miniBtnSkip) {
@@ -2674,7 +2674,7 @@ async function dialerStep({sameMember=false}={}) {
             btnSkip.disabled = true;
             btnSkip.style.background = '#2f3640';
             btnSkip.style.color = '#718093';
-            btnSkip.innerText = '下一通';
+            btnSkip.innerText = '語音／下一通';
         }
 
         if(pauseBtn) {
@@ -2898,7 +2898,7 @@ function dialerOnMiss(isManual) {
 
     // ★ 新增：手動操作時防呆確認
     if (isManual) {
-        if (!confirm('⚠️ 準備結束此通電話並壓未接紀錄\n\n請確認：您的實體話機「是否已經掛斷」且線路已清空？')) {
+        if (!confirm('準備結束此通電話並寫入未接紀錄。\n\n請確認實體話機已掛斷，且線路已清空。')) {
             return;
         }
     }
@@ -2938,7 +2938,7 @@ async function dialerOnSkip() {
     const shouldWriteVoice=dialerCallReady;
     const voiceCount=dialerCallAttempt;
     const confirmText=shouldWriteVoice
-        ? '確定已轉語音並掛斷嗎？\n\n將寫入「語音 *'+voiceCount+'」後直接切換下一通，不會重複撥打這筆名單。'
+        ? '確定已轉語音嗎？\n\n請確認實體話機已掛斷，且線路已清空。\n\n將寫入「語音 *'+voiceCount+'」後直接切換下一通，不會重複撥打這筆名單。'
         : '撥號尚未成功建立。\n\n確定要跳過這筆名單嗎？此次不會寫入聯繫紀錄。';
 
     if (!confirm(confirmText)) return;
@@ -3111,7 +3111,7 @@ function dialerToggleMinimize() {
             <div style="display:flex;gap:4px;margin-left:4px;">
                 <button id="mini-btn-answer" style="padding:4px 8px;border:none;border-radius:6px;background:#27ae60;color:white;font-weight:bold;font-size:12px;cursor:pointer;">✅</button>
                 <button id="mini-btn-miss" style="padding:4px 8px;border:none;border-radius:6px;background:#e74c3c;color:white;font-weight:bold;font-size:12px;cursor:pointer;">❌</button>
-                <button id="mini-btn-skip" style="padding:4px 8px;border:none;border-radius:6px;background:#636e72;color:white;font-weight:bold;font-size:13px;cursor:pointer;">⏭</button>
+                <button id="mini-btn-skip" title="語音／下一通" style="padding:4px 8px;border:none;border-radius:6px;background:#636e72;color:white;font-weight:bold;font-size:13px;cursor:pointer;">⏭</button>
                 <button id="mini-btn-pause" style="padding:4px 8px;border:none;border-radius:6px;background:#8e44ad;color:white;font-weight:bold;font-size:13px;cursor:pointer;">⏸</button>
             </div>
         `;
