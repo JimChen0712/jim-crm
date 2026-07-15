@@ -2274,7 +2274,7 @@ let dialerPaused     = false;
 let dialerCallReady  = false;
 let dialerRequestToken = 0;
 let dialerCallAttempt = 1;
-const DIALER_CALL_SECONDS = 35;
+const DIALER_CALL_SECONDS = 40;
 const DIALER_EXTENSION_KEY = 'etalking_dialer_extension_' + crmUid;
 let dialerExtension  = (()=>{
     try{return localStorage.getItem(DIALER_EXTENSION_KEY)||'';}catch(e){return '';}
