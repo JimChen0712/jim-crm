@@ -350,6 +350,16 @@ function normalizeLogText(value){
     return String(value || '').replace(/\s+/g, '').toUpperCase();
 }
 
+function escapeHtml(value){
+    return String(value ?? '').replace(/[&<>"']/g,char=>({
+        '&':'&amp;',
+        '<':'&lt;',
+        '>':'&gt;',
+        '"':'&quot;',
+        "'":'&#39;'
+    })[char]);
+}
+
 function extractDate(value){
     const match = String(value || '').match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if(!match) return '';
@@ -3200,6 +3210,9 @@ function dialerCloseHistory() {
 
 async function dialerOpenHistory(item) {
     dialerCloseHistory();
+    const memberId=item.member_id||item.id||'';
+    const safeMemberName=escapeHtml(item.member_name||'');
+    const safeMobile=escapeHtml(item.mobile||'');
 
     const dialerRect = dialerPanel.getBoundingClientRect();
 
@@ -3242,7 +3255,7 @@ async function dialerOpenHistory(item) {
             font-size:14px;
             flex-shrink:0;
         ">
-            <span>歷史紀錄 — ${item.member_name || ''}（${item.mobile || ''}）</span>
+            <span>歷史紀錄 — ${safeMemberName}（${safeMobile}）</span>
             <button id="dialer-history-close" style="
                 background:transparent;border:none;
                 font-size:18px;cursor:pointer;
@@ -3262,8 +3275,9 @@ async function dialerOpenHistory(item) {
     document.getElementById('dialer-history-close').onclick = dialerCloseHistory;
 
     try {
-        const res = await fetch('/admin/request_develop?member_id=' + item.member_id + '&hide_layout=true');
+        const res = await guardFetch('/admin/request_develop?member_id='+encodeURIComponent(memberId)+'&hide_layout=true&dialer_history='+Date.now(),{cache:'no-store'},20000);
         const html = await res.text();
+        if(!res.ok||!looksLikeMemberDetail(html,memberId))throw new Error('後台連線或登入狀態已失效');
         const doc = new DOMParser().parseFromString(html, 'text/html');
         const rows = doc.querySelectorAll('table tbody tr');
 
@@ -3305,14 +3319,19 @@ async function dialerOpenHistory(item) {
             if(content.includes('已接') || content.includes('【')) contentColor = '#2ecc71';
 
             const rowBg = idx % 2 === 0 ? '#1e272e' : '#252f38';
+            const safeNum=escapeHtml(num);
+            const safeTime=escapeHtml(time);
+            const safeType=escapeHtml(type);
+            const safeContent=escapeHtml(content).replace(/\n/g,'<br>');
+            const safeOperator=escapeHtml(operator);
 
             tableHtml += `
                 <tr style="background:${rowBg};border-bottom:1px solid #2f3640;">
-                    <td style="padding:5px 6px;color:#636e72;white-space:nowrap;">${num}</td>
-                    <td style="padding:5px 6px;color:#718093;white-space:nowrap;font-size:10px;">${time}</td>
-                    <td style="padding:5px 6px;color:${typeColor};white-space:nowrap;">${type}</td>
-                    <td style="padding:5px 6px;color:${contentColor};word-break:break-all;line-height:1.5;">${content.replace(/\n/g, '<br>')}</td>
-                    <td style="padding:5px 6px;color:#636e72;white-space:nowrap;font-size:10px;">${operator}</td>
+                    <td style="padding:5px 6px;color:#636e72;white-space:nowrap;">${safeNum}</td>
+                    <td style="padding:5px 6px;color:#718093;white-space:nowrap;font-size:10px;">${safeTime}</td>
+                    <td style="padding:5px 6px;color:${typeColor};white-space:nowrap;">${safeType}</td>
+                    <td style="padding:5px 6px;color:${contentColor};word-break:break-all;line-height:1.5;">${safeContent}</td>
+                    <td style="padding:5px 6px;color:#636e72;white-space:nowrap;font-size:10px;">${safeOperator}</td>
                 </tr>
             `;
         });
