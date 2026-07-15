@@ -2322,6 +2322,7 @@ function dialerDestroy() {
     dialerActive = false;
     dialerPaused = false;
     dialerPendingPause = false;
+    dialerMinimized = false;
     if(dialerPanel) { dialerPanel.remove(); dialerPanel = null; }
     dialerCloseHistory();
     document.removeEventListener('keydown', dialerKeyHandler);
@@ -2535,7 +2536,7 @@ function dialerInit(queue) {
     const dragHandle = document.getElementById('dialer-header');
     let isDragging = false, dragOffX = 0, dragOffY = 0;
     dragHandle.addEventListener('mousedown', e => {
-        if(e.target.id === 'dialer-close-btn') return;
+        if(e.target.closest('button')) return;
         isDragging = true;
         const rect = dialerPanel.getBoundingClientRect();
         dragOffX = e.clientX - rect.left;
@@ -2545,7 +2546,7 @@ function dialerInit(queue) {
     });
     // ★ 修改點：增加觸控事件 (Touch)，讓手機也能拖曳撥號面板
     dragHandle.addEventListener('touchstart', e => {
-        if(e.target.id === 'dialer-close-btn') return;
+        if(e.target.closest('button')) return;
         isDragging = true;
         const touch = e.touches[0];
         const rect = dialerPanel.getBoundingClientRect();
@@ -3247,6 +3248,7 @@ function dialerToggleMinimize() {
         bodyEls.forEach(el => { el.dataset.prevDisplay = el.style.display || ''; el.style.display = 'none'; });
         miniBar.style.display = 'flex';
         dialerPanel.style.width = '460px';
+        dialerPanel.style.maxWidth = 'calc(100vw - 40px)';
         document.getElementById('dialer-minimize-btn').innerText = '▣';
         dialerSyncMiniBar();
     } else {
@@ -3259,6 +3261,7 @@ function dialerToggleMinimize() {
             }
         });
         dialerPanel.style.width = '320px';
+        dialerPanel.style.maxWidth = '320px';
         document.getElementById('dialer-minimize-btn').innerText = '▬';
     }
 }
