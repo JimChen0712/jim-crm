@@ -588,12 +588,13 @@ historyOverlay.id='contact-history-overlay';
 historyOverlay.style.cssText='display:none;position:absolute;inset:0;background:rgba(22,34,45,0.58);z-index:1000006;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;';
 historyOverlay.innerHTML=`
     <div id="contact-history-modal" style="width:100%;max-width:760px;max-height:88%;background:#fff;border-radius:10px;box-shadow:0 14px 45px rgba(0,0,0,0.3);display:flex;flex-direction:column;overflow:hidden;">
-        <div style="padding:14px 16px;background:#2c3e50;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;">
-            <div style="min-width:0;">
-                <div style="font-size:15px;font-weight:bold;">📜 聯繫歷史</div>
-                <div id="contact-history-member" style="font-size:12px;color:#dfe6e9;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+        <div style="padding:8px 12px;background:#2c3e50;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">
+            <div style="min-width:0;display:flex;align-items:center;gap:7px;white-space:nowrap;overflow:hidden;">
+                <span style="font-size:13px;font-weight:bold;flex-shrink:0;">聯繫歷史</span>
+                <span style="color:#95a5a6;font-size:11px;flex-shrink:0;">·</span>
+                <span id="contact-history-member" style="font-size:11px;color:#dfe6e9;overflow:hidden;text-overflow:ellipsis;"></span>
             </div>
-            <button id="contact-history-close" title="關閉" style="background:transparent;border:none;color:#fff;font-size:25px;line-height:1;cursor:pointer;padding:2px 6px;">×</button>
+            <button id="contact-history-close" title="關閉" style="background:transparent;border:none;color:#fff;font-size:20px;line-height:1;cursor:pointer;padding:0 4px;">×</button>
         </div>
         <div style="padding:9px 14px;border-bottom:1px solid #e5e8eb;background:#f8f9fa;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">
             <span id="contact-history-updated" style="font-size:11px;color:#7f8c8d;">點擊後才會載入系統紀錄</span>
