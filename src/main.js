@@ -160,6 +160,9 @@ function setLocalContacted(id, toggle = false) {
 /* ══ 全局變數 ══ */
 let sheetData={}, sheetRowMap={};
 let allData=[], detailData={}, currentItem=null;
+let contactHistoryCache={};
+let currentHistoryMemberId='';
+let historyShowAll=false;
 let maxKnownRow = 1;
 
 let currentTab = 'crm';
@@ -579,6 +582,31 @@ recordModal.id='record-modal';
 recordModal.style.cssText='display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:90vw;max-width:480px;max-height:85vh;overflow-y:auto;background:white;padding:20px;border-radius:8px;box-shadow:0 4px 15px rgba(0,0,0,0.2);z-index:1000005;';
 recordModal.innerHTML='<h4 style="margin-top:0;">新增聯絡紀錄</h4><input type="hidden" id="modal-member-id"><div id="modal-info-text" style="font-size:11px;color:#e67e22;margin-bottom:10px;font-weight:bold;"></div><div style="margin-bottom:10px;"><label>聯絡類型:</label><select id="modal-status" style="width:100%;padding:5px;margin-top:5px;"><option value="3">未接</option><option value="1">已接聽</option><option value="2">非本人</option><option value="4">關機</option></select></div><div style="margin-bottom:10px;"><label>聯絡內容:</label><textarea id="modal-content" style="width:100%;padding:5px;margin-top:5px;min-height:60px;font-family:sans-serif;font-size:13px;border:1px solid #ddd;border-radius:4px;resize:vertical;">未接 *1</textarea></div><div style="margin-bottom:10px;"><label>下次聯繫日期:</label><input type="date" id="modal-date" style="width:100%;padding:5px;margin-top:5px;"></div><div style="display:flex;justify-content:space-between;margin-top:15px;"><button id="modal-cancel" style="padding:5px 15px;cursor:pointer;">取消</button><button id="modal-submit" style="padding:5px 15px;background:#27ae60;color:white;border:none;cursor:pointer;border-radius:4px;">送出紀錄</button></div>';
 
+/* ══ 聯繫歷史 Modal（點擊單筆名單時才載入）══ */
+const historyOverlay=document.createElement('div');
+historyOverlay.id='contact-history-overlay';
+historyOverlay.style.cssText='display:none;position:absolute;inset:0;background:rgba(22,34,45,0.58);z-index:1000006;align-items:center;justify-content:center;padding:18px;box-sizing:border-box;';
+historyOverlay.innerHTML=`
+    <div id="contact-history-modal" style="width:100%;max-width:760px;max-height:88%;background:#fff;border-radius:10px;box-shadow:0 14px 45px rgba(0,0,0,0.3);display:flex;flex-direction:column;overflow:hidden;">
+        <div style="padding:14px 16px;background:#2c3e50;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0;">
+            <div style="min-width:0;">
+                <div style="font-size:15px;font-weight:bold;">📜 聯繫歷史</div>
+                <div id="contact-history-member" style="font-size:12px;color:#dfe6e9;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+            </div>
+            <button id="contact-history-close" title="關閉" style="background:transparent;border:none;color:#fff;font-size:25px;line-height:1;cursor:pointer;padding:2px 6px;">×</button>
+        </div>
+        <div style="padding:9px 14px;border-bottom:1px solid #e5e8eb;background:#f8f9fa;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">
+            <span id="contact-history-updated" style="font-size:11px;color:#7f8c8d;">點擊後才會載入系統紀錄</span>
+            <button id="contact-history-refresh" style="padding:5px 10px;border:1px solid #3498db;border-radius:4px;background:#fff;color:#2980b9;cursor:pointer;font-size:11px;font-weight:bold;">重新整理</button>
+        </div>
+        <div id="contact-history-body" style="padding:14px;overflow-y:auto;min-height:180px;background:#f4f6f7;flex:1;"></div>
+        <div style="padding:10px 14px;border-top:1px solid #e5e8eb;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;">
+            <span id="contact-history-count" style="font-size:11px;color:#7f8c8d;"></span>
+            <button id="contact-history-toggle" style="display:none;padding:5px 12px;border:1px solid #bdc3c7;border-radius:4px;background:#fff;color:#555;cursor:pointer;font-size:11px;font-weight:bold;">顯示全部</button>
+        </div>
+    </div>
+`;
+
 /* ══ 單筆/一般批次 釋出 Modal ══ */
 const releaseModal=document.createElement('div');
 releaseModal.id='release-modal';
@@ -698,7 +726,7 @@ if(!document.getElementById('crm-mobile-style')){
     width:720px !important;
     min-width:720px !important;
   }
-  #record-modal, #release-modal, #pool-assign-modal{
+  #record-modal, #release-modal, #pool-assign-modal, #contact-history-modal{
     width:92vw !important;
     max-width:480px !important;
     max-height:88vh !important;
@@ -711,7 +739,160 @@ panel.appendChild(content);
 panel.appendChild(recordModal);
 panel.appendChild(releaseModal);
 panel.appendChild(poolAssignModal);
+panel.appendChild(historyOverlay);
 document.body.appendChild(panel);
+
+function closeContactHistory(){
+    historyOverlay.style.display='none';
+    currentHistoryMemberId='';
+    historyShowAll=false;
+}
+
+function getHistoryTypeColor(type){
+    const text=String(type||'');
+    if(text.includes('聯絡'))return '#27ae60';
+    if(text.includes('DEMO')||text.includes('Demo')||text.includes('demo'))return '#e67e22';
+    if(text.includes('名單移動'))return '#8e44ad';
+    if(text.includes('指派'))return '#2980b9';
+    return '#7f8c8d';
+}
+
+function renderContactHistory(entry){
+    const body=document.getElementById('contact-history-body');
+    const count=document.getElementById('contact-history-count');
+    const toggle=document.getElementById('contact-history-toggle');
+    body.textContent='';
+
+    if(!entry||!entry.logs.length){
+        const empty=document.createElement('div');
+        empty.style.cssText='padding:40px 15px;text-align:center;color:#95a5a6;font-size:13px;';
+        empty.textContent='目前找不到可顯示的聯繫歷史。';
+        body.appendChild(empty);
+        count.textContent='共 0 筆紀錄';
+        toggle.style.display='none';
+        return;
+    }
+
+    const visibleLogs=historyShowAll?entry.logs:entry.logs.slice(0,20);
+    visibleLogs.forEach(log=>{
+        const card=document.createElement('div');
+        card.style.cssText='background:#fff;border:1px solid #e1e5e8;border-left:4px solid '+getHistoryTypeColor(log.type)+';border-radius:6px;padding:10px 12px;margin-bottom:9px;box-shadow:0 1px 2px rgba(0,0,0,0.04);';
+
+        const top=document.createElement('div');
+        top.style.cssText='display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:6px;';
+        const type=document.createElement('span');
+        type.style.cssText='font-size:11px;font-weight:bold;color:'+getHistoryTypeColor(log.type)+';';
+        type.textContent=log.type||'系統紀錄';
+        const date=document.createElement('span');
+        date.style.cssText='font-size:11px;color:#7f8c8d;text-align:right;white-space:nowrap;';
+        date.textContent=log.date||'日期未記錄';
+        top.appendChild(type);
+        top.appendChild(date);
+        card.appendChild(top);
+
+        const contentEl=document.createElement('div');
+        contentEl.style.cssText='font-size:13px;line-height:1.55;color:#2c3e50;white-space:pre-wrap;word-break:break-word;';
+        contentEl.textContent=log.content||'（無內容）';
+        card.appendChild(contentEl);
+
+        if(log.nextTime&&!log.nextTime.includes('0000')){
+            const next=document.createElement('div');
+            next.style.cssText='font-size:11px;color:#d35400;margin-top:7px;padding-top:6px;border-top:1px dashed #eee;';
+            next.textContent='下次聯繫：'+log.nextTime;
+            card.appendChild(next);
+        }
+        body.appendChild(card);
+    });
+
+    count.textContent='顯示 '+visibleLogs.length+' 筆，共 '+entry.logs.length+' 筆紀錄';
+    if(entry.logs.length>20){
+        toggle.style.display='inline-block';
+        toggle.textContent=historyShowAll?'只顯示最近 20 筆':'顯示全部';
+    }else{
+        toggle.style.display='none';
+    }
+}
+
+async function loadContactHistory(memberId, forceRefresh=false){
+    const id=String(memberId);
+    const body=document.getElementById('contact-history-body');
+    const updated=document.getElementById('contact-history-updated');
+    const refreshBtn=document.getElementById('contact-history-refresh');
+
+    if(!forceRefresh&&contactHistoryCache[id]){
+        renderContactHistory(contactHistoryCache[id]);
+        updated.textContent='本次面板已載入：'+contactHistoryCache[id].fetchedAt;
+        return;
+    }
+
+    body.innerHTML='<div style="padding:45px 15px;text-align:center;color:#3498db;font-size:13px;font-weight:bold;">🔄 正在載入這筆名單的聯繫歷史...</div>';
+    document.getElementById('contact-history-count').textContent='';
+    document.getElementById('contact-history-toggle').style.display='none';
+    updated.textContent='正在連線公司系統...';
+    refreshBtn.disabled=true;
+    refreshBtn.style.opacity='0.55';
+
+    try{
+        const res=await guardFetch('/admin/request_develop?member_id='+encodeURIComponent(id)+'&hide_layout=true&crm_history='+Date.now(),{cache:'no-store'},20000);
+        const html=await res.text();
+        if(!res.ok||!looksLikeMemberDetail(html,id))throw new Error('後台連線或登入狀態已失效');
+
+        const doc=new DOMParser().parseFromString(html,'text/html');
+        const logs=[];
+        doc.querySelectorAll('table tbody tr').forEach(row=>{
+            const cells=row.querySelectorAll('td');
+            if(cells.length<4)return;
+            const type=cells[3]?cells[3].innerText.trim():'';
+            const content=cells[4]?cells[4].innerText.trim():'';
+            const date=cells[1]?cells[1].innerText.trim():'';
+            const nextTime=cells[2]?cells[2].innerText.trim():'';
+            if(!type&&!content&&!date)return;
+            logs.push({type,content,date,nextTime});
+        });
+
+        const entry={logs,fetchedAt:new Date().toLocaleString('zh-TW')};
+        contactHistoryCache[id]=entry;
+        if(currentHistoryMemberId===id){
+            renderContactHistory(entry);
+            updated.textContent='最後載入：'+entry.fetchedAt;
+        }
+    }catch(e){
+        if(currentHistoryMemberId===id){
+            body.textContent='';
+            const error=document.createElement('div');
+            error.style.cssText='padding:40px 15px;text-align:center;color:#c0392b;font-size:13px;line-height:1.6;';
+            error.textContent='❌ 聯繫歷史載入失敗\n'+(e.message||e)+'\n請確認後台登入狀態後再點擊「重新整理」。';
+            body.appendChild(error);
+            updated.textContent='載入失敗';
+        }
+    }finally{
+        refreshBtn.disabled=false;
+        refreshBtn.style.opacity='1';
+    }
+}
+
+function openContactHistory(item){
+    const id=String(item.member_id||item.id||'');
+    if(!id)return;
+    currentHistoryMemberId=id;
+    historyShowAll=false;
+    document.getElementById('contact-history-member').textContent=(item.member_name||'未知名單')+' · ID '+id;
+    historyOverlay.style.display='flex';
+    loadContactHistory(id,false);
+}
+
+document.getElementById('contact-history-close').onclick=closeContactHistory;
+historyOverlay.onclick=e=>{if(e.target===historyOverlay)closeContactHistory();};
+document.getElementById('contact-history-refresh').onclick=()=>{
+    if(!currentHistoryMemberId)return;
+    historyShowAll=false;
+    loadContactHistory(currentHistoryMemberId,true);
+};
+document.getElementById('contact-history-toggle').onclick=()=>{
+    if(!currentHistoryMemberId||!contactHistoryCache[currentHistoryMemberId])return;
+    historyShowAll=!historyShowAll;
+    renderContactHistory(contactHistoryCache[currentHistoryMemberId]);
+};
 
 /* ══ ★ 身分任意門切換邏輯 ══ */
 if(isManager || isSpoofing) {
@@ -1107,7 +1288,7 @@ function renderList(){
 
         const batchCell = isManager ? '<td style="padding:6px;text-align:center;vertical-align:top;"><input type="checkbox" class="row-cb" value="'+id+'" style="cursor:pointer;"></td>' : '';
 
-        html+='<tr style="border-bottom:1px solid #dee2e6;border-left:4px solid '+rowBorderColor+';">' + batchCell + '<td style="padding:6px;vertical-align:top;"><b>'+(item.member_name||'未知')+'</b><br><span style="background:'+ts.bg+';color:white;padding:1px 5px;border-radius:3px;font-size:10px;">'+ts.label+'</span>'+reInquireHtml+progressHtml+'</td><td style="padding:6px;vertical-align:top;">'+(item.mobile||'-')+'</td><td style="padding:6px;vertical-align:top;">'+gradeHtml+'</td><td style="padding:6px;vertical-align:top;">'+memoHtml+'</td><td style="padding:6px;vertical-align:top;"><span style="color:#d35400;">'+(item.type==2 && d ? (d.lastLogNextTime || d.normalDate || '無紀錄') : (item.next_time&&!item.next_time.includes('0000')?item.next_time.split(' ')[0]:'無紀錄'))+'</span>'+warningHtml+'</td>'+sourceCell+'<td style="padding:6px;color:#7f8c8d;vertical-align:top;font-size:11px;">'+displayUserName+'</td><td style="padding:6px;vertical-align:top;"><button class="quick-record-btn" data-id="'+id+'" style="padding:4px 8px;background:'+btnBg+';color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">壓紀錄</button><button class="quick-release-btn" data-id="'+id+'" style="margin-top:4px;padding:4px 8px;background:#c0392b;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">釋出</button></td></tr>';
+        html+='<tr style="border-bottom:1px solid #dee2e6;border-left:4px solid '+rowBorderColor+';">' + batchCell + '<td style="padding:6px;vertical-align:top;"><b>'+(item.member_name||'未知')+'</b><br><span style="background:'+ts.bg+';color:white;padding:1px 5px;border-radius:3px;font-size:10px;">'+ts.label+'</span>'+reInquireHtml+progressHtml+'</td><td style="padding:6px;vertical-align:top;">'+(item.mobile||'-')+'</td><td style="padding:6px;vertical-align:top;">'+gradeHtml+'</td><td style="padding:6px;vertical-align:top;">'+memoHtml+'</td><td style="padding:6px;vertical-align:top;"><span style="color:#d35400;">'+(item.type==2 && d ? (d.lastLogNextTime || d.normalDate || '無紀錄') : (item.next_time&&!item.next_time.includes('0000')?item.next_time.split(' ')[0]:'無紀錄'))+'</span>'+warningHtml+'</td>'+sourceCell+'<td style="padding:6px;color:#7f8c8d;vertical-align:top;font-size:11px;">'+displayUserName+'</td><td style="padding:6px;vertical-align:top;"><button class="quick-record-btn" data-id="'+id+'" style="padding:4px 8px;background:'+btnBg+';color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">壓紀錄</button><button class="history-btn" data-id="'+id+'" style="margin-top:4px;padding:4px 8px;background:#34495e;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">聯繫歷史</button><button class="quick-release-btn" data-id="'+id+'" style="margin-top:4px;padding:4px 8px;background:#c0392b;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;width:100%;">釋出</button></td></tr>';
     });
 
     html+='</table></div>';
@@ -1240,6 +1421,14 @@ function renderList(){
             contentEl.value='未接 *1';
             contentEl.style.minHeight='60px';
             recordModal.style.display='block';
+        };
+    });
+
+    document.querySelectorAll('.history-btn').forEach(btn=>{
+        btn.onclick=e=>{
+            const memberId=e.currentTarget.getAttribute('data-id');
+            const item=allData.find(m=>(m.member_id||m.id)==memberId);
+            if(item)openContactHistory(item);
         };
     });
 
