@@ -2263,6 +2263,7 @@ let dialerActive     = false;
 let dialerPaused     = false;
 let dialerCallReady  = false;
 let dialerRequestToken = 0;
+let dialerCallAttempt = 1;
 const DIALER_CALL_SECONDS = 35;
 const DIALER_EXTENSION_KEY = 'etalking_dialer_extension_' + crmUid;
 let dialerExtension  = (()=>{
@@ -2444,7 +2445,7 @@ function dialerInit(queue) {
                 background:#3498db;color:white;font-weight:bold;font-size:12px;
                 cursor:pointer;white-space:nowrap;
             ">重新撥號</button>
-            <button id="dialer-btn-skip" style="
+            <button id="dialer-btn-skip" title="轉語音後切換下一通" style="
                 padding:10px 8px;border:none;border-radius:8px;
                 background:#636e72;color:white;font-weight:bold;font-size:12px;
                 cursor:pointer;
@@ -2549,7 +2550,7 @@ function dialerInit(queue) {
     document.getElementById('dialer-minimize-btn').onclick = () => { dialerToggleMinimize(); };
     document.getElementById('dialer-btn-answer').onclick = dialerOnAnswer;
     document.getElementById('dialer-btn-miss').onclick   = () => dialerOnMiss(true);
-    document.getElementById('dialer-btn-retry').onclick  = () => dialerStep();
+    document.getElementById('dialer-btn-retry').onclick  = () => dialerStep({sameMember:true});
     document.getElementById('dialer-btn-skip').onclick   = dialerOnSkip;
 
     document.getElementById('dialer-btn-pause').onclick = () => {
@@ -2612,9 +2613,10 @@ function setDialerCallActionsReady(ready){
     });
 }
 
-async function dialerStep() {
+async function dialerStep({sameMember=false}={}) {
     const requestToken=++dialerRequestToken;
     dialerCallReady=false;
+    if(!sameMember)dialerCallAttempt=1;
     if(dialerTimer)        clearTimeout(dialerTimer);
     if(dialerTickInterval) clearInterval(dialerTickInterval);
     dialerCloseHistory();
@@ -2727,7 +2729,7 @@ async function dialerStep() {
     if(barEl)     barEl.style.width = pct + '%';
     const missN = dialerMissCount[item.member_id] || 0;
     if(missEl)    missEl.innerText = missN > 0 ? '本次已未接 ' + missN + ' 次' : '';
-    if(statusEl)  statusEl.innerText = '正在建立撥號...';
+    if(statusEl)  statusEl.innerText = '正在建立第 '+dialerCallAttempt+' 次撥號...';
     dialerCountdown = 0;
 
     dialerPanel.style.border = '2px solid #f39c12';
@@ -2776,7 +2778,7 @@ async function dialerStep() {
     const SEC = DIALER_CALL_SECONDS;
     dialerCallReady=true;
     setDialerCallActionsReady(true);
-    if(statusEl) statusEl.innerText = '撥號已建立，撥出中...';
+    if(statusEl) statusEl.innerText = '第 '+dialerCallAttempt+' 次撥號已建立，撥出中...';
     if(hintText) hintText.innerText = '秒後自動視為未接';
     if(cdText) cdText.style.color = '#e74c3c';
     dialerCountdown = SEC;
@@ -2785,26 +2787,6 @@ async function dialerStep() {
     dialerTickInterval = setInterval(() => {
         dialerCountdown--;
         dialerUpdateCountdown(dialerCountdown, SEC);
-
-        if (dialerCountdown <= SEC - 20) {
-            const bSkip = document.getElementById('dialer-btn-skip');
-            const mSkip = document.getElementById('mini-btn-skip');
-            if (bSkip && !bSkip.disabled) {
-                bSkip.disabled = true;
-                bSkip.style.background = '#2f3640';
-                bSkip.style.border = 'none';
-                bSkip.style.color = '#718093';
-                bSkip.style.cursor = 'not-allowed';
-                bSkip.innerText = '下一通';
-            }
-            if (mSkip && !mSkip.disabled) {
-                mSkip.disabled = true;
-                mSkip.style.background = '#2f3640';
-                mSkip.style.border = 'none';
-                mSkip.style.color = '#718093';
-                mSkip.style.cursor = 'not-allowed';
-            }
-        }
 
         if(dialerCountdown <= 0) {
             clearInterval(dialerTickInterval);
@@ -2930,35 +2912,53 @@ function dialerOnMiss(isManual) {
     const item = dialerQueue[dialerIndex];
     if(!item) return;
 
-    dialerMissCount[item.member_id] = (dialerMissCount[item.member_id] || 0) + 1;
-    const n = dialerMissCount[item.member_id];
+    const n = dialerCallAttempt;
+    dialerMissCount[item.member_id] = n;
 
     const statusEl = document.getElementById('dialer-status-label');
-    if(statusEl) statusEl.innerText = (isManual ? '❌ 手動標記未接' : '⏳ 逾時未接') + `，壓紀錄中...`;
+    if(statusEl) statusEl.innerText = (isManual ? '手動標記未接' : '逾時未接') + `，正在寫入未接 *${n}...`;
 
-    dialerAutoRecord(item, n).then(() => {
+    dialerAutoRecord(item, n, '未接').then(() => {
         setTimeout(() => {
-            dialerIndex++;
-            dialerStep();
+            if(n < 2){
+                dialerCallAttempt = 2;
+                dialerStep({sameMember:true});
+            }else{
+                dialerIndex++;
+                dialerStep();
+            }
         }, 600);
     });
 }
 
-function dialerOnSkip() {
+async function dialerOnSkip() {
     if(!dialerActive) return;
+    const item = dialerQueue[dialerIndex];
+    if(!item)return;
+    const shouldWriteVoice=dialerCallReady;
+    const voiceCount=dialerCallAttempt;
+    const confirmText=shouldWriteVoice
+        ? '確定已轉語音並掛斷嗎？\n\n將寫入「語音 *'+voiceCount+'」後直接切換下一通，不會重複撥打這筆名單。'
+        : '撥號尚未成功建立。\n\n確定要跳過這筆名單嗎？此次不會寫入聯繫紀錄。';
 
-    // ★ 新增：防呆確認
-    if (!confirm('⚠️ 準備跳過此筆名單\n\n請確認：您的實體話機「是否已經掛斷」且線路已清空？')) {
-        return;
-    }
+    if (!confirm(confirmText)) return;
 
+    dialerCallReady=false;
     if(dialerTimer)        clearTimeout(dialerTimer);
     if(dialerTickInterval) clearInterval(dialerTickInterval);
+    const skipBtn=document.getElementById('dialer-btn-skip');
+    if(skipBtn)skipBtn.disabled=true;
+    if(shouldWriteVoice){
+        const statusEl=document.getElementById('dialer-status-label');
+        if(statusEl)statusEl.innerText='正在寫入語音 *'+voiceCount+'...';
+        await dialerAutoRecord(item,voiceCount,'語音');
+        await new Promise(r=>setTimeout(r,600));
+    }
     dialerIndex++;
     dialerStep();
 }
 
-async function dialerAutoRecord(item, missCount) {
+async function dialerAutoRecord(item, attemptCount, resultLabel='未接') {
     const nextDate = (() => {
         const d = new Date();
         d.setDate(d.getDate() + 10);
@@ -2966,7 +2966,7 @@ async function dialerAutoRecord(item, missCount) {
     })();
 
     const memberId = item.member_id;
-    const content  = `未接 *${missCount}`;
+    const content  = `${resultLabel} *${attemptCount}`;
 
     try {
         let iframe = document.getElementById('hidden-save-frame');
@@ -3127,17 +3127,6 @@ function dialerToggleMinimize() {
             pauseBtn.style.background = dialerPendingPause ? '#27ae60' : '#8e44ad';
         };
         setDialerCallActionsReady(dialerCallReady);
-    }
-
-    if (dialerCallReady && dialerCountdown <= DIALER_CALL_SECONDS - 20) {
-        const mSkip = document.getElementById('mini-btn-skip');
-        if (mSkip) {
-            mSkip.disabled = true;
-            mSkip.style.background = '#2f3640';
-            mSkip.style.border = 'none';
-            mSkip.style.color = '#718093';
-            mSkip.style.cursor = 'not-allowed';
-        }
     }
 
     dialerMinimized = !dialerMinimized;
