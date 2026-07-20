@@ -51,10 +51,12 @@ const isSpoofing=!!originalUid;
 const fetchUrl='https://server.etalkingonline.com/name_list/new_list/'+(isManager?'-1':crmUid);
 const CRM_BUILD_ID=__CRM_BUILD_ID__;
 const CRM_SCRIPT_CHECK_URL='https://raw.githubusercontent.com/JimChen0712/etalking-crm/main/crm.js';
-const PANEL_MAX_AGE_MS=2*60*60*1000;
+const CHANNEL_MAX_AGE_MS=2*60*60*1000;
 const GUARD_SESSION_CACHE_MS=30000;
 const GUARD_VERSION_CACHE_MS=60000;
-const panelStartedAt=Date.now();
+const channelStartedAt=(window.performance&&Number.isFinite(window.performance.timeOrigin))
+    ? window.performance.timeOrigin
+    : Date.now();
 let lastBackendGuardAt=0;
 let lastVersionGuardAt=0;
 let lastGuardAlertAt=0;
@@ -129,8 +131,8 @@ async function ensureBackendSession(memberId){
 }
 
 async function ensurePanelCanWrite(memberId){
-    if(Date.now()-panelStartedAt>PANEL_MAX_AGE_MS){
-        throw new Error('CRM 面板已開啟超過 2 小時，請重新整理後台並重新開啟面板');
+    if(Date.now()-channelStartedAt>CHANNEL_MAX_AGE_MS){
+        throw new Error('通道頁面已開啟超過 2 小時，請回後台點開任一筆名單的「編輯」，再重新開啟 CRM');
     }
     await ensureLatestPanelVersion();
     await ensureBackendSession(memberId);
@@ -508,7 +510,7 @@ header.id='crm-header';
 header.innerHTML = `
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-right:85px;padding-bottom:5px;">
         <h3 style="margin:0 8px 0 0;font-size:15px;color:white;">名單管理面板</h3>
-        <span id="panel-age-status" title="此處顯示 CRM 面板開啟時間，不代表後台 session 剩餘時間" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(255,255,255,0.24);background:rgba(46,204,113,0.15);color:#d5f5e3;font-size:10px;font-weight:bold;white-space:nowrap;">CRM 已開啟 0分鐘</span>
+        <span id="panel-age-status" title="此處顯示目前通道頁面的開啟時間；重開書籤不會重新計時" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(255,255,255,0.24);background:rgba(46,204,113,0.15);color:#d5f5e3;font-size:10px;font-weight:bold;white-space:nowrap;">通道已開啟 0分鐘</span>
 ${isManager ? `
     <button id="tab-crm" style="padding:4px 14px;cursor:pointer;border-radius:4px;border:2px solid #3498db;background:#3498db;color:white;font-weight:bold;">名單管理</button>
     <button id="tab-pool" style="padding:4px 14px;cursor:pointer;border-radius:4px;border:2px solid rgba(255,255,255,0.4);background:transparent;color:white;font-weight:bold;">釋出池</button>
@@ -784,20 +786,20 @@ function formatPanelElapsed(ms){
 function updatePanelAgeStatus(){
     const el=document.getElementById('panel-age-status');
     if(!el)return;
-    const elapsed=Date.now()-panelStartedAt;
-    const warningAt=PANEL_MAX_AGE_MS-15*60*1000;
-    if(elapsed>=PANEL_MAX_AGE_MS){
-        el.innerText='CRM 已達安全使用上限｜請重開';
+    const elapsed=Date.now()-channelStartedAt;
+    const warningAt=CHANNEL_MAX_AGE_MS-15*60*1000;
+    if(elapsed>=CHANNEL_MAX_AGE_MS){
+        el.innerText='通道已過期｜回後台點開名單後重開 CRM';
         el.style.background='rgba(231,76,60,0.24)';
         el.style.borderColor='#e74c3c';
         el.style.color='#ffb8b0';
     }else if(elapsed>=warningAt){
-        el.innerText='CRM 已開啟 '+formatPanelElapsed(elapsed)+'｜建議重開';
+        el.innerText='通道已開啟 '+formatPanelElapsed(elapsed)+'｜請準備重建';
         el.style.background='rgba(243,156,18,0.22)';
         el.style.borderColor='#f39c12';
         el.style.color='#ffe0a3';
     }else{
-        el.innerText='CRM 已開啟 '+formatPanelElapsed(elapsed);
+        el.innerText='通道已開啟 '+formatPanelElapsed(elapsed);
         el.style.background='rgba(46,204,113,0.15)';
         el.style.borderColor='rgba(46,204,113,0.55)';
         el.style.color='#d5f5e3';
