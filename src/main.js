@@ -2484,12 +2484,12 @@ function dialerInit(queue) {
         <div id="dialer-interview-area" style="display:none;padding:0 14px 14px;">
             <div style="border-top:1px solid #2f3640;padding-top:10px;margin-bottom:8px;">
                 <div style="font-size:11px;color:#2ecc71;font-weight:bold;margin-bottom:6px;">🟢 通話中 — 訪談記錄</div>
-                <textarea id="dialer-interview-text" rows="8" style="
+                <textarea id="dialer-interview-text" rows="12" style="
                     width:100%;box-sizing:border-box;
                     background:#2f3640;color:#dcdde1;
                     border:1px solid #4f5d73;border-radius:6px;
-                    padding:8px;font-size:11px;font-family:sans-serif;
-                    resize:vertical;line-height:1.5;
+                    padding:10px;font-size:12px;font-family:sans-serif;
+                    min-height:240px;resize:vertical;line-height:1.55;
                 "></textarea>
             </div>
             
@@ -2679,6 +2679,10 @@ async function dialerStep({sameMember=false}={}) {
     setDialerCallActionsReady(false);
 
     dialerPaused = false;
+    if(!dialerMinimized){
+        dialerPanel.style.width = '320px';
+        dialerPanel.style.maxWidth = '320px';
+    }
 
     if(dialerPendingPause) {
         dialerPendingPause = false;
@@ -2890,6 +2894,10 @@ function dialerOnAnswer() {
 
     if(dialerTimer)        clearTimeout(dialerTimer);
     if(dialerTickInterval) clearInterval(dialerTickInterval);
+
+    if(dialerMinimized)dialerToggleMinimize();
+    dialerPanel.style.width = '480px';
+    dialerPanel.style.maxWidth = 'calc(100vw - 40px)';
 
     dialerPanel.style.border = '2px solid #2ecc71';
     dialerPanel.classList.remove('dialer-warning-pulse'); 
