@@ -481,6 +481,7 @@ async function syncDemoRawData(){
 }
 
 /* ══ DOM UI ══ */
+if(window.__etalkingCrmPanelAgeTimer)clearInterval(window.__etalkingCrmPanelAgeTimer);
 ['custom-crm-curtain','custom-crm-panel'].forEach(id=>{const el=document.getElementById(id);if(el)el.remove();});
 const curtain=document.createElement('div');
 curtain.id='custom-crm-curtain';
@@ -507,6 +508,7 @@ header.id='crm-header';
 header.innerHTML = `
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-right:85px;padding-bottom:5px;">
         <h3 style="margin:0 8px 0 0;font-size:15px;color:white;">名單管理面板</h3>
+        <span id="panel-age-status" title="此處顯示 CRM 面板開啟時間，不代表後台 session 剩餘時間" style="padding:3px 7px;border-radius:5px;border:1px solid rgba(255,255,255,0.24);background:rgba(46,204,113,0.15);color:#d5f5e3;font-size:10px;font-weight:bold;white-space:nowrap;">CRM 已開啟 0分鐘</span>
 ${isManager ? `
     <button id="tab-crm" style="padding:4px 14px;cursor:pointer;border-radius:4px;border:2px solid #3498db;background:#3498db;color:white;font-weight:bold;">名單管理</button>
     <button id="tab-pool" style="padding:4px 14px;cursor:pointer;border-radius:4px;border:2px solid rgba(255,255,255,0.4);background:transparent;color:white;font-weight:bold;">釋出池</button>
@@ -771,6 +773,39 @@ panel.appendChild(releaseModal);
 panel.appendChild(poolAssignModal);
 panel.appendChild(historyOverlay);
 document.body.appendChild(panel);
+
+function formatPanelElapsed(ms){
+    const totalMinutes=Math.max(0,Math.floor(ms/60000));
+    const hours=Math.floor(totalMinutes/60);
+    const minutes=totalMinutes%60;
+    return (hours?hours+'小時 ':'')+minutes+'分鐘';
+}
+
+function updatePanelAgeStatus(){
+    const el=document.getElementById('panel-age-status');
+    if(!el)return;
+    const elapsed=Date.now()-panelStartedAt;
+    const warningAt=PANEL_MAX_AGE_MS-15*60*1000;
+    if(elapsed>=PANEL_MAX_AGE_MS){
+        el.innerText='CRM 已達安全使用上限｜請重開';
+        el.style.background='rgba(231,76,60,0.24)';
+        el.style.borderColor='#e74c3c';
+        el.style.color='#ffb8b0';
+    }else if(elapsed>=warningAt){
+        el.innerText='CRM 已開啟 '+formatPanelElapsed(elapsed)+'｜建議重開';
+        el.style.background='rgba(243,156,18,0.22)';
+        el.style.borderColor='#f39c12';
+        el.style.color='#ffe0a3';
+    }else{
+        el.innerText='CRM 已開啟 '+formatPanelElapsed(elapsed);
+        el.style.background='rgba(46,204,113,0.15)';
+        el.style.borderColor='rgba(46,204,113,0.55)';
+        el.style.color='#d5f5e3';
+    }
+}
+
+updatePanelAgeStatus();
+window.__etalkingCrmPanelAgeTimer=setInterval(updatePanelAgeStatus,30000);
 
 function closeContactHistory(){
     historyOverlay.style.display='none';
@@ -1739,6 +1774,10 @@ document.getElementById('pool-assign-submit').onclick = async () => {
 
 document.getElementById('close-btn').onclick=()=>{
     dialerDestroy();
+    if(window.__etalkingCrmPanelAgeTimer){
+        clearInterval(window.__etalkingCrmPanelAgeTimer);
+        window.__etalkingCrmPanelAgeTimer=null;
+    }
     // ★ 修改點：關閉時若有注入手機版 viewport 則還原，避免影響原系統
     if (addedViewport) {
         const m = document.getElementById('custom-crm-viewport');
