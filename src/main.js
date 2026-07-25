@@ -50,7 +50,7 @@ const isManager=crmUid===MANAGER_UID;
 const isSpoofing=!!originalUid; 
 const fetchUrl='https://server.etalkingonline.com/name_list/new_list/'+(isManager?'-1':crmUid);
 const CRM_BUILD_ID=__CRM_BUILD_ID__;
-const CRM_SCRIPT_CHECK_URL='https://raw.githubusercontent.com/JimChen0712/etalking-crm/main/crm.js';
+const CRM_SCRIPT_CHECK_URL='https://raw.githubusercontent.com/JimChen0712/jim-crm/main/crm.js';
 const CHANNEL_MAX_AGE_MS=2*60*60*1000;
 const GUARD_SESSION_CACHE_MS=30000;
 const GUARD_VERSION_CACHE_MS=60000;

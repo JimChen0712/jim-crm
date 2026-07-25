@@ -118,7 +118,7 @@ npm run build
 ```javascript
 javascript:(function(){
     var script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/gh/JimChen0712/etalking-crm@main/crm.js?v=' + Date.now();
+    script.src = 'https://cdn.jsdelivr.net/gh/JimChen0712/jim-crm@main/crm.js?v=' + Date.now();
     document.body.appendChild(script);
 })();
 ```
