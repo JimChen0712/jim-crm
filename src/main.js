@@ -1000,7 +1000,7 @@ if(isManager || isSpoofing) {
     const spoofBtn = document.getElementById('spoof-identity-btn');
     if(spoofBtn) {
         spoofBtn.onclick = () => {
-            const targetUid = prompt('🕵️‍♂️【主管任意門】\n請輸入您想模擬登入的「員工代號」(例如：445)\n\n※ 想要恢復原本的主管身分，請輸入 424。', '');
+            const targetUid = prompt(`🕵️‍♂️【主管任意門】\n請輸入您想模擬登入的「員工代號」(例如：445)\n\n※ 想要恢復原本的主管身分，請輸入 ${MANAGER_UID}。`, '');
             if(targetUid !== null && targetUid.trim() !== '') {
                 const cleanUid = targetUid.trim();
                 const confirmName = USER_DICT[cleanUid] || ('未知代號: ' + cleanUid);

@@ -1,4 +1,4 @@
-export const MANAGER_UID = '424';
+export const MANAGER_UID = '162';
 export const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxSPDlyiL8Mvx77Jcj0nUuiqjmhWuC9GS4_ZLbpfwGwaMRjL2vfdVvlYFpVmww076elMw/exec';
 
 export const INTERVIEW_TEMPLATE = `【英文名字】
