@@ -1,6 +1,6 @@
-# Etalking CRM 增強面板
+# Jim CRM 增強面板
 
-Etalking CRM 是運行在 Etalking 後台的書籤工具，用來整合名單管理、Google Sheets 同步、聯繫歷史、觸及率計算與自動撥號。
+Jim CRM 是運行在指定管理後台的書籤工具，用來整合名單管理、Google Sheets 同步、聯繫歷史、觸及率計算與自動撥號。
 
 原始碼位於 `src/`，建置後產生 `dist/crm.js` 與專案根目錄的 `crm.js`。正式書籤會載入 GitHub `main` 分支上的 `crm.js`。
 
@@ -75,7 +75,7 @@ member_id, 姓名, 電話, 來源, 業務, uid,
 
 ## 安全與限制
 
-- 只允許在 Etalking 指定後台網域執行。
+- 只允許在指定管理後台網域執行。
 - 面板開啟超過 2 小時後禁止新的寫入。
 - 寫入前會檢查後台登入狀態與正式版本。
 - GAS 請求有 timeout 與明確錯誤提示。
@@ -111,7 +111,7 @@ npm run build
 3. 確認 `crm.js` 與 `dist/crm.js` 內容一致。
 4. Commit `src/*`、`crm.js` 與 `dist/crm.js`。
 5. Push 到 GitHub `main`。
-6. 重新整理 Etalking 後台，重新點擊書籤測試。
+6. 重新整理管理後台，重新點擊書籤測試。
 
 ## 書籤程式碼
 
