@@ -197,6 +197,8 @@ let renderPoolList = () => {};
 let currentPage = 1;
 let poolCurrentPage = 1;
 let currentSearchTerm = '';
+let selectedRowIds = new Set();
+let isBatchRecording = false;
 
 /* ══════════════════════════════════════════════════════
    ★ Global Promise Queue（全域單線程排隊鎖）
@@ -529,6 +531,7 @@ ${isManager ? `
                 <button id="sync-pool-btn" style="padding:2px 10px;cursor:pointer;border-radius:4px;border:none;background:#2ecc71;color:white;font-weight:bold;font-size:11px;height:22px;line-height:18px;">更新釋出池</button>
             </div>
         ` : '<span style="font-size:12px;color:#bdc3c7;">我的名單</span>'}
+        <button id="batch-record-btn" style="padding:4px 10px;cursor:pointer;border-radius:4px;border:none;background:#27ae60;color:white;font-weight:bold;display:none;">批次壓紀錄 (0)</button>
         
         <input type="text" id="global-search-input" placeholder="🔍 搜尋姓名/電話" style="padding:4px 8px;border-radius:4px;border:none;width:120px;font-size:12px;outline:none;margin-left:4px;">
         
@@ -1067,6 +1070,7 @@ function updateSourceDropdown() {
 
 async function fetchData(){
     detailData = {}; 
+    selectedRowIds.clear();
     const statusLabel=document.getElementById('loading-status');
     content.innerHTML='<div style="text-align:center;padding:20px;">資料載入中...</div>';
     statusLabel.innerText='🔄 連接 Google Sheet...';
@@ -1260,6 +1264,7 @@ document.getElementById('global-search-input').addEventListener('input', (e) => 
     currentSearchTerm = e.target.value.trim().toLowerCase();
     currentPage = 1;
     poolCurrentPage = 1;
+    selectedRowIds.clear();
     if (currentTab === 'pool') renderPoolList();
     else renderList();
 });
@@ -1289,7 +1294,14 @@ function renderList(){
     });
     
     filteredData.sort((a,b)=>(getDropDaysLeft(a,detailData[a.member_id])??999)-(getDropDaysLeft(b,detailData[b.member_id])??999));
-    if(!filteredData.length){content.innerHTML='<div style="text-align:center;padding:20px;color:#666;">找不到符合條件的名單。</div>';return;}
+    if(!filteredData.length){
+        content.innerHTML='<div style="text-align:center;padding:20px;color:#666;">找不到符合條件的名單。</div>';
+        const batchBtn = document.getElementById('batch-release-btn');
+        const batchRecBtn = document.getElementById('batch-record-btn');
+        if(batchBtn) batchBtn.style.display = 'none';
+        if(batchRecBtn && !isBatchRecording) batchRecBtn.style.display = 'none';
+        return;
+    }
     
     // ★ 分頁邏輯計算
     const ITEMS_PER_PAGE = 150;
@@ -1301,7 +1313,7 @@ function renderList(){
 
     const typeStyles={'1':{label:'新單',bg:'#1a6fc4'},'2':{label:'常態',bg:'#27ae60'},'3':{label:'Demo',bg:'#8e44ad'},'4':{label:'釋出',bg:'#e67e22'}};
     const sourceHeader=(isManager || isSpoofing)?'<th style="padding:6px;width:7%;">來源</th>':'';
-    const batchHeader = isManager ? '<th style="padding:6px;width:30px;text-align:center;"><input type="checkbox" id="select-all-cb" style="cursor:pointer;"></th>' : '';
+    const batchHeader = '<th style="padding:6px;width:30px;text-align:center;"><input type="checkbox" id="select-all-cb" style="cursor:pointer;"></th>';
 
     let html='<div class="table-wrapper" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch;"><table style="width:100%;min-width:850px;border-collapse:collapse;font-size:12px;">';
     html+='<tr style="background:#e9ecef;text-align:left;position:sticky;top:0;z-index:10;">' + batchHeader + '<th style="padding:6px;">姓名/狀態</th><th style="padding:6px;">電話</th><th style="padding:6px;width:10%;">等級</th><th style="padding:6px;width:22%;">備註</th><th style="padding:6px;width:16%;">下次聯繫 & 預警</th>'+sourceHeader+'<th style="padding:6px;">業務</th><th style="padding:6px;width:9%;">操作</th></tr>';
@@ -1387,7 +1399,8 @@ function renderList(){
                 '</div>';
         }
 
-        const batchCell = isManager ? '<td style="padding:6px;text-align:center;vertical-align:top;"><input type="checkbox" class="row-cb" value="'+id+'" style="cursor:pointer;"></td>' : '';
+        const isRowChecked = selectedRowIds.has(String(id));
+        const batchCell = '<td style="padding:6px;text-align:center;vertical-align:top;"><input type="checkbox" class="row-cb" value="'+id+'" '+(isRowChecked?'checked':'')+' style="cursor:pointer;"></td>';
         const hasPhone=!!String(item.mobile||'').trim();
         const nameTools='<span style="display:inline-flex;align-items:center;gap:8px;margin-left:6px;vertical-align:middle;">' +
             '<button class="history-btn" data-id="'+id+'" title="查看聯繫歷史" aria-label="查看聯繫歷史" style="width:24px;height:22px;padding:0;border:1px solid #b2babb;border-radius:50%;background:#f2f3f4;color:#707b7c;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;">' +
@@ -1432,33 +1445,55 @@ function renderList(){
     // ★ 綁定分頁按鈕事件
     const prevBtn = document.getElementById('page-prev-btn');
     const nextBtn = document.getElementById('page-next-btn');
-    if(prevBtn && !prevBtn.disabled) prevBtn.onclick = () => { currentPage--; renderList(); };
-    if(nextBtn && !nextBtn.disabled) nextBtn.onclick = () => { currentPage++; renderList(); };
+    if(prevBtn && !prevBtn.disabled) prevBtn.onclick = () => { selectedRowIds.clear(); currentPage--; renderList(); };
+    if(nextBtn && !nextBtn.disabled) nextBtn.onclick = () => { selectedRowIds.clear(); currentPage++; renderList(); };
 
-    if (isManager) {
-        const batchBtn = document.getElementById('batch-release-btn');
-        const updateBatchBtn = () => {
-            const checkedCount = document.querySelectorAll('.row-cb:checked').length;
-            if(batchBtn) {
-                if(checkedCount > 0) {
-                    batchBtn.style.display = 'inline-block';
-                    batchBtn.innerText = '批量處理 (' + checkedCount + ')';
-                } else {
-                    batchBtn.style.display = 'none';
-                }
+    const batchBtn = document.getElementById('batch-release-btn');
+    const batchRecBtn = document.getElementById('batch-record-btn');
+    const updateBatchBtn = () => {
+        const checkedCount = document.querySelectorAll('.row-cb:checked').length;
+        if(batchBtn) {
+            if(checkedCount > 0) {
+                batchBtn.style.display = 'inline-block';
+                batchBtn.innerText = '批量處理 (' + checkedCount + ')';
+            } else {
+                batchBtn.style.display = 'none';
             }
-        };
-        
-        const selectAllCb = document.getElementById('select-all-cb');
-        if(selectAllCb) {
-            selectAllCb.onchange = e => {
-                document.querySelectorAll('.row-cb').forEach(cb => cb.checked = e.target.checked);
-                updateBatchBtn();
-            };
         }
-        document.querySelectorAll('.row-cb').forEach(cb => cb.onchange = updateBatchBtn);
-        updateBatchBtn();
+        if(batchRecBtn && !isBatchRecording) {
+            if(checkedCount > 0) {
+                batchRecBtn.style.display = 'inline-block';
+                batchRecBtn.innerText = '批次壓紀錄 (' + checkedCount + ')';
+            } else {
+                batchRecBtn.style.display = 'none';
+            }
+        }
+    };
+    
+    const selectAllCb = document.getElementById('select-all-cb');
+    const rowCbs = Array.from(document.querySelectorAll('.row-cb'));
+    if(selectAllCb) {
+        selectAllCb.checked = rowCbs.length > 0 && rowCbs.every(cb => cb.checked);
+        selectAllCb.onchange = e => {
+            rowCbs.forEach(cb => {
+                cb.checked = e.target.checked;
+                if (e.target.checked) selectedRowIds.add(String(cb.value));
+                else selectedRowIds.delete(String(cb.value));
+            });
+            updateBatchBtn();
+        };
     }
+    rowCbs.forEach(cb => {
+        cb.onchange = () => {
+            if (cb.checked) selectedRowIds.add(String(cb.value));
+            else selectedRowIds.delete(String(cb.value));
+            if (selectAllCb) {
+                selectAllCb.checked = rowCbs.length > 0 && rowCbs.every(x => x.checked);
+            }
+            updateBatchBtn();
+        };
+    });
+    updateBatchBtn();
 
     document.querySelectorAll('.reinquire-btn').forEach(btn=>{
         btn.onclick=e=>{
@@ -1596,6 +1631,7 @@ document.getElementById('modal-submit').onclick=async()=>{
                 detailData[memberId].lastLogNextTime = params['search_begin'];
             }
             currentItem.next_time=params['search_begin']+' 11:59:59';
+            delete contactHistoryCache[String(memberId)];
 
             if (params['contact_status'] === '1' && currentItem.type == 4) {
                 setLocalContacted(memberId, false);
@@ -1610,6 +1646,154 @@ document.getElementById('modal-submit').onclick=async()=>{
         notifyGuardError(e);
     }
 };
+
+/* ══ 名單管理頁面：批次壓紀錄 (所有人皆可使用) ══ */
+const batchRecBtnObj = document.getElementById('batch-record-btn');
+if (batchRecBtnObj) {
+    batchRecBtnObj.onclick = async () => {
+        if (isBatchRecording) return;
+        const checkedCbs = document.querySelectorAll('.row-cb:checked');
+        if (checkedCbs.length === 0) return;
+        const memberIds = Array.from(checkedCbs).map(cb => String(cb.value));
+
+        const formatDate = (date) => {
+            const y = date.getFullYear();
+            const mo = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return y + '-' + mo + '-' + d;
+        };
+        const today = new Date();
+        const nextTarget = new Date(today);
+        nextTarget.setDate(today.getDate() + 10);
+        const nextDateStr = formatDate(nextTarget);
+
+        if (!confirm(
+            `確定要對勾選的 ${memberIds.length} 筆名單執行「批次壓紀錄」嗎？\n\n` +
+            `• 聯絡類型：未接\n` +
+            `• 聯絡內容：未接 *1\n` +
+            `• 下次聯繫：${nextDateStr} (+10天)\n\n` +
+            `執行期間請勿關閉或重新整理網頁。`
+        )) return;
+
+        isBatchRecording = true;
+        batchRecBtnObj.disabled = true;
+        batchRecBtnObj.style.background = '#95a5a6';
+        const statusLabel = document.getElementById('loading-status');
+        const randomDelay = (min, max) => new Promise(res => setTimeout(res, Math.random() * (max - min) + min));
+
+        let successCount = 0;
+        let failCount = 0;
+        let abortedError = null;
+
+        try {
+            for (let i = 0; i < memberIds.length; i++) {
+                const mId = memberIds[i];
+                const progressText = `壓紀錄中 (${i + 1}/${memberIds.length})...`;
+                batchRecBtnObj.innerText = progressText;
+                if (statusLabel) statusLabel.innerText = '🔄 批次' + progressText;
+
+                try {
+                    await ensurePanelCanWrite(mId);
+
+                    const targetName = 'crm-batch-record-' + Date.now() + '-' + i + '-' + Math.random().toString(36).slice(2);
+                    const iframe = document.createElement('iframe');
+                    iframe.name = targetName;
+                    iframe.style.display = 'none';
+                    iframe.sandbox = 'allow-forms allow-same-origin';
+                    document.body.appendChild(iframe);
+
+                    const form = document.createElement('form');
+                    form.target = targetName;
+                    form.method = 'POST';
+                    form.action = 'https://www.etalkingonline.com/admin/request_develop/save';
+
+                    const params = {
+                        'current_member_id': mId,
+                        'contact_status': '3',
+                        'content': '未接 *1',
+                        'sub_content': '',
+                        'search_begin': nextDateStr,
+                        'time': '12:00:00',
+                        'consultant_type': '10',
+                        'type': '20'
+                    };
+                    for (let k in params) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = k;
+                        input.value = params[k];
+                        form.appendChild(input);
+                    }
+
+                    document.body.appendChild(form);
+                    form.submit();
+                    setTimeout(() => form.remove(), 500);
+                    setTimeout(() => iframe.remove(), 4000);
+
+                    await randomDelay(1200, 1800);
+
+                    const item = allData.find(m => (m.member_id || m.id) == mId);
+                    if (item && item.type == 1 && detailData[mId]) {
+                        detailData[mId].contactCount++;
+                    }
+                    if (detailData[mId]) {
+                        detailData[mId].lastLogNextTime = nextDateStr;
+                    }
+                    if (item) {
+                        item.next_time = nextDateStr + ' 11:59:59';
+                    }
+                    delete contactHistoryCache[String(mId)];
+                    selectedRowIds.delete(String(mId));
+                    successCount++;
+                } catch (err) {
+                    console.error(`名單 ${mId} 批次壓紀錄失敗:`, err);
+                    const msg = err && err.message ? err.message : String(err || '');
+                    const mustStop = msg.includes('超過 2 小時') ||
+                        msg.includes('面板已有新版') ||
+                        msg.includes('登入狀態') ||
+                        msg.includes('連線逾時');
+                    if (mustStop) {
+                        abortedError = err;
+                        break;
+                    }
+                    failCount++;
+                }
+            }
+        } finally {
+            isBatchRecording = false;
+            batchRecBtnObj.disabled = false;
+            batchRecBtnObj.style.background = '#27ae60';
+            if (!abortedError) {
+                selectedRowIds.clear();
+            }
+            renderList();
+        }
+
+        if (abortedError) {
+            if (statusLabel) statusLabel.innerText = '❌ 批次壓紀錄已中斷';
+            notifyGuardError(abortedError);
+            alert(
+                `⚠️ 批次壓紀錄已中斷！\n\n` +
+                `已完成：${successCount} 筆\n` +
+                `未完成：${memberIds.length - successCount} 筆\n\n` +
+                (abortedError.message || abortedError)
+            );
+            return;
+        }
+
+        if (statusLabel) {
+            statusLabel.innerText = `✅ 批次壓紀錄完成 (${successCount} 筆)`;
+            setTimeout(() => {
+                if (statusLabel.innerText.includes('批次壓紀錄完成')) statusLabel.innerText = '';
+            }, 3000);
+        }
+        alert(
+            `✅ 批次壓紀錄執行完畢！\n` +
+            `成功: ${successCount} 筆` +
+            (failCount > 0 ? `\n失敗: ${failCount} 筆` : '')
+        );
+    };
+}
 
 /* ══ 名單管理頁面：批次處理 (包含延遲的原始邏輯) ══ */
 const batchBtnObj = document.getElementById('batch-release-btn');
@@ -1678,6 +1862,7 @@ document.getElementById('release-submit').onclick = async () => {
                 
                 successCount++;
                 allData = allData.filter(m => (m.member_id || m.id) != mId);
+                selectedRowIds.delete(String(mId));
                 
             } catch(err) {
                 console.error(`名單 ${mId} 處理失敗:`, err);
@@ -1792,13 +1977,14 @@ document.getElementById('refresh-btn').onclick=fetchData;
 
 // ★ 所有切換條件時，重置為第一頁 (加上防護罩避免組員端報錯)
 if(document.getElementById('t-type-filter')) {
-    document.getElementById('t-type-filter').onchange = () => { currentPage = 1; renderList(); };
+    document.getElementById('t-type-filter').onchange = () => { selectedRowIds.clear(); currentPage = 1; renderList(); };
 }
 if(document.getElementById('source-filter')) {
-    document.getElementById('source-filter').onchange = () => { currentPage = 1; renderList(); };
+    document.getElementById('source-filter').onchange = () => { selectedRowIds.clear(); currentPage = 1; renderList(); };
 }
 if(document.getElementById('consultant-filter')) {
     document.getElementById('consultant-filter').onchange=function(){
+        selectedRowIds.clear();
         currentPage = 1;
         renderList();
         if(this.value!=='-1')loadDetailsForConsultant(this.value);
@@ -1821,6 +2007,7 @@ if(isManager){
         });
 
         // 切換頁籤時重置分頁狀態
+        selectedRowIds.clear();
         currentPage = 1;
         poolCurrentPage = 1;
 
@@ -1838,7 +2025,7 @@ if(isManager){
         } else {
             tabPool.style.background = '#2ecc71';
             tabPool.style.border = '2px solid #2ecc71';
-            ['consultant-filter','source-filter','sync-all-new-btn','sync-demo-btn','bulk-sync-rate-btn','refresh-btn'].forEach(id => {
+            ['consultant-filter','source-filter','sync-all-new-btn','sync-demo-btn','bulk-sync-rate-btn','refresh-btn','batch-release-btn','batch-record-btn'].forEach(id => {
                 const el = document.getElementById(id);
                 if(el) el.style.display = 'none';
             });
@@ -2187,8 +2374,9 @@ if(isManager){
         };
     }
 
-    document.getElementById('source-filter').onchange = () => { currentPage = 1; renderList(); };
+    document.getElementById('source-filter').onchange = () => { selectedRowIds.clear(); currentPage = 1; renderList(); };
     document.getElementById('consultant-filter').onchange=function(){
+        selectedRowIds.clear();
         currentPage = 1;
         renderList();
         if(this.value!=='-1')loadDetailsForConsultant(this.value);
